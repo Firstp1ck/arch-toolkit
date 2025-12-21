@@ -12,28 +12,13 @@ permissions:
 
 jobs:
 
-  build-linux:
+  update-release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-      
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libssl-dev \
-            pkg-config
-      
-      - name: Build Release
-        run: cargo build --release
       
       - name: Get tag name and check prerelease
         id: tag
@@ -57,15 +42,13 @@ jobs:
             echo "prerelease=false" >> $GITHUB_OUTPUT
           fi
       
-      - name: Create or Update Release and Upload Asset
+      - name: Update Release Metadata
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: Release ${{ steps.tag.outputs.tag }}
-          files: target/release/libarch_toolkit.rlib
           draft: false
           prerelease: ${{ steps.tag.outputs.prerelease == 'true' }}
           generate_release_notes: false
-          fail_on_unmatched_files: false
           token: ${{ secrets.GITHUB_TOKEN }}
 
