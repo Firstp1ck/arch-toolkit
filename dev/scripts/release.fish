@@ -216,7 +216,7 @@ function phase2_documentation
     log_step "Generate Release Notes"
     _blue; echo -n "[INFO] "; _reset; echo -n "Please run: "; _bold; echo "/release-new $new_ver"; _reset
     
-    set -l release_file "$ARCH_TOOLKIT_DIR/Documents/RELEASE_v$new_ver.md"
+    set -l release_file "$ARCH_TOOLKIT_DIR/docs/RELEASE_v$new_ver.md"
     
     if test "$DRY_RUN" = true
         log_info "[DRY-RUN] Would wait for release notes generation"
@@ -464,7 +464,7 @@ function phase4_build_release
     # Step 4.6: Create GitHub release (binary uploaded by GitHub Action)
     log_step "Creating GitHub Release"
     
-    set -l release_file "$ARCH_TOOLKIT_DIR/Documents/RELEASE_v$new_ver.md"
+    set -l release_file "$ARCH_TOOLKIT_DIR/docs/RELEASE_v$new_ver.md"
     
     # Determine if this is a prerelease (version < 1.0.0)
     set -l prerelease_flag ""
@@ -583,7 +583,7 @@ end
 function check_preflight
     log_info "Running pre-flight checks..."
     
-    cd "$PACSEA_DIR"
+    cd "$ARCH_TOOLKIT_DIR"
     
     # Check if on main branch
     set -l current_branch (git branch --show-current)
@@ -723,7 +723,7 @@ end
 function update_changelog
     set -l new_ver $argv[1]
     set -l changelog_file "$ARCH_TOOLKIT_DIR/CHANGELOG.md"
-    set -l release_file "$ARCH_TOOLKIT_DIR/Documents/RELEASE_v$new_ver.md"
+    set -l release_file "$ARCH_TOOLKIT_DIR/docs/RELEASE_v$new_ver.md"
     
     log_step "Updating CHANGELOG.md"
     
@@ -881,9 +881,6 @@ function main
     or return 1
     
     phase4_build_release "$new_version"
-    or return 1
-    
-    phase4_release "$new_version"
     or return 1
     
     # Final summary
