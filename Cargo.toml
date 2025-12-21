@@ -1,0 +1,54 @@
+[package]
+name = "arch-toolkit"
+version = "0.1.0"
+edition = "2024"
+description = "Complete Rust toolkit for Arch Linux package management"
+license = "MIT"
+repository = "https://github.com/Firstp1ck/arch-toolkit"
+keywords = ["archlinux", "aur", "pacman", "package-manager"]
+categories = ["api-bindings", "command-line-utilities"]
+
+[features]
+default = ["aur"]
+aur = ["dep:reqwest", "dep:tokio", "dep:scraper", "dep:chrono", "dep:rand"]
+
+[dependencies]
+# Always included (minimal)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+
+# HTTP client (for aur feature)
+reqwest = { version = "0.12", features = ["json"], optional = true }
+tokio = { version = "1", features = ["rt", "time"], optional = true }
+
+# HTML parsing (for aur comments)
+scraper = { version = "0.25", optional = true }
+
+# Date handling (for aur comments)
+chrono = { version = "0.4", optional = true }
+
+# Random number generation (for rate limiting jitter)
+rand = { version = "0.9", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+wiremock = "0.6"
+
+[package.metadata.docs.rs]
+all-features = true
+
+[lints.clippy]
+# Enable cognitive complexity lint to catch overly complex functions
+cognitive_complexity = "warn"
+pedantic = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+unwrap_used = "deny"
+# Keep docs linting consistent with clippy naming
+missing_docs_in_private_items = "warn"
+
+[lints.rust]
+missing_docs = "warn"
+# Ignored tests run with:
+# cargo test -- --ignored
