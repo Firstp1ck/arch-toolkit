@@ -1,7 +1,11 @@
 //! AUR search functionality.
 
 use crate::aur::utils::{percent_encode, s};
-use crate::client::{is_archlinux_url, rate_limit_archlinux, reset_archlinux_backoff};
+use crate::cache::cache_key_search;
+use crate::client::{
+    ArchClient, extract_retry_after, is_archlinux_url, rate_limit_archlinux,
+    reset_archlinux_backoff, retry_with_policy,
+};
 use crate::error::{ArchToolkitError, Result};
 use crate::types::AurPackage;
 use reqwest::Client;
@@ -11,7 +15,7 @@ use tracing::{debug, warn};
 /// What: Search for packages in the AUR by name.
 ///
 /// Inputs:
-/// - `client`: HTTP client to use for requests.
+/// - `client`: `ArchClient` to use for requests.
 /// - `query`: Search query string.
 ///
 /// Output:
@@ -23,14 +27,28 @@ use tracing::{debug, warn};
 /// - Percent-encodes the query string for URL safety.
 /// - Applies rate limiting for archlinux.org requests.
 /// - Returns empty vector if no results found (not an error).
+/// - Uses retry policy if enabled for search operations.
+/// - Checks cache before making network request if caching is enabled.
 ///
 /// # Errors
 /// - Returns `Err(ArchToolkitError::Network)` if the HTTP request fails
 /// - Returns `Err(ArchToolkitError::InvalidInput)` if the URL is not from archlinux.org
-pub async fn search(client: &Client, query: &str) -> Result<Vec<AurPackage>> {
+pub async fn search(client: &ArchClient, query: &str) -> Result<Vec<AurPackage>> {
     let trimmed_query = query.trim();
     if trimmed_query.is_empty() {
         return Ok(Vec::new());
+    }
+
+    // Check cache if enabled
+    if let Some(cache_config) = client.cache_config()
+        && cache_config.enable_search
+        && let Some(cache) = client.cache()
+    {
+        let cache_key = cache_key_search(trimmed_query);
+        if let Some(cached) = cache.get::<Vec<AurPackage>>(&cache_key) {
+            debug!(query = trimmed_query, "cache hit for search");
+            return Ok(cached);
+        }
     }
 
     let encoded_query = percent_encode(trimmed_query);
@@ -49,7 +67,45 @@ pub async fn search(client: &Client, query: &str) -> Result<Vec<AurPackage>> {
         )));
     };
 
-    let response = match client.get(&url).send().await {
+    let retry_policy = client.retry_policy();
+    let http_client = client.http_client();
+
+    // Wrap the request in retry logic if enabled
+    let result = if retry_policy.enabled && retry_policy.retry_search {
+        retry_with_policy(retry_policy, "search", || async {
+            perform_search_request(http_client, &url).await
+        })
+        .await
+    } else {
+        perform_search_request(http_client, &url).await
+    }?;
+
+    // Store in cache if enabled
+    if let Some(cache_config) = client.cache_config()
+        && cache_config.enable_search
+        && let Some(cache) = client.cache()
+    {
+        let cache_key = cache_key_search(trimmed_query);
+        let _ = cache.set(&cache_key, &result, cache_config.search_ttl);
+    }
+
+    Ok(result)
+}
+
+/// What: Perform the actual search request without retry logic.
+///
+/// Inputs:
+/// - `client`: HTTP client to use for requests.
+/// - `url`: URL to request.
+///
+/// Output:
+/// - `Result<Vec<AurPackage>>` containing search results, or an error.
+///
+/// Details:
+/// - Internal helper function that performs the HTTP request and parsing
+/// - Used by both retry and non-retry code paths
+async fn perform_search_request(client: &Client, url: &str) -> Result<Vec<AurPackage>> {
+    let response = match client.get(url).send().await {
         Ok(resp) => {
             reset_archlinux_backoff();
             resp
@@ -60,10 +116,15 @@ pub async fn search(client: &Client, query: &str) -> Result<Vec<AurPackage>> {
         }
     };
 
+    // Check for Retry-After header before consuming response
+    let _retry_after = extract_retry_after(&response);
+
     let response = match response.error_for_status() {
         Ok(resp) => resp,
         Err(e) => {
             warn!(error = %e, "AUR search returned non-success status");
+            // If we have retry_after, we could use it, but error_for_status consumes the response
+            // For now, the retry logic will handle exponential backoff
             return Err(ArchToolkitError::Network(e));
         }
     };
@@ -119,11 +180,7 @@ pub async fn search(client: &Client, query: &str) -> Result<Vec<AurPackage>> {
         }
     }
 
-    debug!(
-        query = trimmed_query,
-        count = packages.len(),
-        "AUR search completed"
-    );
+    debug!(count = packages.len(), "AUR search completed");
 
     Ok(packages)
 }

@@ -1,7 +1,11 @@
 //! PKGBUILD fetching functionality.
 
 use crate::aur::utils::percent_encode;
-use crate::client::{is_archlinux_url, rate_limit_archlinux, reset_archlinux_backoff};
+use crate::cache::cache_key_pkgbuild;
+use crate::client::{
+    ArchClient, extract_retry_after, is_archlinux_url, rate_limit_archlinux,
+    reset_archlinux_backoff, retry_with_policy,
+};
 use crate::error::{ArchToolkitError, Result};
 use reqwest::Client;
 use std::sync::Mutex;
@@ -18,7 +22,7 @@ const PKGBUILD_MIN_INTERVAL_MS: u64 = 200;
 /// What: Fetch PKGBUILD content for an AUR package.
 ///
 /// Inputs:
-/// - `client`: HTTP client to use for requests.
+/// - `client`: `ArchClient` to use for requests.
 /// - `package`: Package name to fetch PKGBUILD for.
 ///
 /// Output:
@@ -29,12 +33,26 @@ const PKGBUILD_MIN_INTERVAL_MS: u64 = 200;
 /// - Applies rate limiting (200ms minimum interval between requests)
 /// - Uses timeout (10 seconds)
 /// - Returns raw PKGBUILD text
+/// - Uses retry policy if enabled for pkgbuild operations.
+/// - Checks cache before making network request if caching is enabled.
 ///
 /// # Errors
 /// - Returns `Err(ArchToolkitError::Network)` if the HTTP request fails
 /// - Returns `Err(ArchToolkitError::InvalidInput)` if the URL is not from archlinux.org
 /// - Returns `Err(ArchToolkitError::Parse)` if rate limiter mutex is poisoned
-pub async fn pkgbuild(client: &Client, package: &str) -> Result<String> {
+pub async fn pkgbuild(client: &ArchClient, package: &str) -> Result<String> {
+    // Check cache if enabled
+    if let Some(cache_config) = client.cache_config()
+        && cache_config.enable_pkgbuild
+        && let Some(cache) = client.cache()
+    {
+        let cache_key = cache_key_pkgbuild(package);
+        if let Some(cached) = cache.get::<String>(&cache_key) {
+            debug!(package = %package, "cache hit for pkgbuild");
+            return Ok(cached);
+        }
+    }
+
     let url = format!(
         "https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h={}",
         percent_encode(package)
@@ -84,9 +102,49 @@ pub async fn pkgbuild(client: &Client, package: &str) -> Result<String> {
         )));
     };
 
+    let retry_policy = client.retry_policy();
+    let http_client = client.http_client();
+
+    // Wrap the request in retry logic if enabled
+    let text = if retry_policy.enabled && retry_policy.retry_pkgbuild {
+        retry_with_policy(retry_policy, "pkgbuild", || async {
+            perform_pkgbuild_request(http_client, &url).await
+        })
+        .await?
+    } else {
+        perform_pkgbuild_request(http_client, &url).await?
+    };
+
+    debug!(package = %package, len = text.len(), "PKGBUILD fetched successfully");
+
+    // Store in cache if enabled
+    if let Some(cache_config) = client.cache_config()
+        && cache_config.enable_pkgbuild
+        && let Some(cache) = client.cache()
+    {
+        let cache_key = cache_key_pkgbuild(package);
+        let _ = cache.set(&cache_key, &text, cache_config.pkgbuild_ttl);
+    }
+
+    Ok(text)
+}
+
+/// What: Perform the actual PKGBUILD request without retry logic.
+///
+/// Inputs:
+/// - `client`: HTTP client to use for requests.
+/// - `url`: URL to request.
+///
+/// Output:
+/// - `Result<String>` containing PKGBUILD text, or an error.
+///
+/// Details:
+/// - Internal helper function that performs the HTTP request
+/// - Used by both retry and non-retry code paths
+async fn perform_pkgbuild_request(client: &Client, url: &str) -> Result<String> {
     // Fetch with timeout
     let response = match client
-        .get(&url)
+        .get(url)
         .timeout(Duration::from_secs(10))
         .send()
         .await
@@ -100,6 +158,9 @@ pub async fn pkgbuild(client: &Client, package: &str) -> Result<String> {
             return Err(ArchToolkitError::Network(e));
         }
     };
+
+    // Check for Retry-After header before consuming response
+    let _retry_after = extract_retry_after(&response);
 
     let response = match response.error_for_status() {
         Ok(resp) => resp,
@@ -116,8 +177,6 @@ pub async fn pkgbuild(client: &Client, package: &str) -> Result<String> {
             return Err(ArchToolkitError::Network(e));
         }
     };
-
-    debug!(package = %package, len = text.len(), "PKGBUILD fetched successfully");
 
     Ok(text)
 }

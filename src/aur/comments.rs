@@ -1,10 +1,14 @@
 //! AUR package comments fetching via web scraping.
 
-use crate::client::{is_archlinux_url, rate_limit_archlinux, reset_archlinux_backoff};
+use crate::cache::cache_key_comments;
+use crate::client::{
+    ArchClient, extract_retry_after, is_archlinux_url, rate_limit_archlinux,
+    reset_archlinux_backoff, retry_with_policy,
+};
 use crate::error::{ArchToolkitError, Result};
 use crate::types::AurComment;
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime};
-use reqwest::Client;
+use reqwest::Client as ReqwestClient;
 use reqwest::header::{ACCEPT, ACCEPT_LANGUAGE, HeaderMap, HeaderValue};
 use scraper::{ElementRef, Html, Selector};
 use tracing::debug;
@@ -28,7 +32,7 @@ struct CommentExtractionContext<'a> {
 /// What: Fetch AUR package comments by scraping the AUR package page.
 ///
 /// Inputs:
-/// - `client`: HTTP client to use for requests.
+/// - `client`: `ArchClient` to use for requests.
 /// - `pkgname`: Package name to fetch comments for.
 ///
 /// Output:
@@ -40,12 +44,26 @@ struct CommentExtractionContext<'a> {
 /// - Parses dates to Unix timestamps for sorting
 /// - Sorts comments by date descending (latest first)
 /// - Handles pinned comments (appear before "Latest Comments" heading)
+/// - Uses retry policy if enabled for comments operations.
+/// - Checks cache before making network request if caching is enabled.
 ///
 /// # Errors
 /// - Returns `Err(ArchToolkitError::Network)` if the HTTP request fails
 /// - Returns `Err(ArchToolkitError::InvalidInput)` if the URL is not from archlinux.org
 /// - Returns `Err(ArchToolkitError::Parse)` if HTML parsing fails
-pub async fn comments(client: &Client, pkgname: &str) -> Result<Vec<AurComment>> {
+pub async fn comments(client: &ArchClient, pkgname: &str) -> Result<Vec<AurComment>> {
+    // Check cache if enabled
+    if let Some(cache_config) = client.cache_config()
+        && cache_config.enable_comments
+        && let Some(cache) = client.cache()
+    {
+        let cache_key = cache_key_comments(pkgname);
+        if let Some(cached) = cache.get::<Vec<AurComment>>(&cache_key) {
+            debug!(pkgname = %pkgname, "cache hit for comments");
+            return Ok(cached);
+        }
+    }
+
     let url = format!("https://aur.archlinux.org/packages/{pkgname}");
 
     debug!(pkgname = %pkgname, url = %url, "fetching AUR comments");
@@ -59,6 +77,47 @@ pub async fn comments(client: &Client, pkgname: &str) -> Result<Vec<AurComment>>
         )));
     };
 
+    let retry_policy = client.retry_policy();
+    let http_client = client.http_client();
+
+    // Wrap the request in retry logic if enabled
+    let html_text = if retry_policy.enabled && retry_policy.retry_comments {
+        retry_with_policy(retry_policy, "comments", || async {
+            perform_comments_request(http_client, &url).await
+        })
+        .await?
+    } else {
+        perform_comments_request(http_client, &url).await?
+    };
+
+    // Parse HTML
+    let result = parse_comments_html(&html_text, pkgname)?;
+
+    // Store in cache if enabled
+    if let Some(cache_config) = client.cache_config()
+        && cache_config.enable_comments
+        && let Some(cache) = client.cache()
+    {
+        let cache_key = cache_key_comments(pkgname);
+        let _ = cache.set(&cache_key, &result, cache_config.comments_ttl);
+    }
+
+    Ok(result)
+}
+
+/// What: Perform the actual comments request without retry logic.
+///
+/// Inputs:
+/// - `client`: HTTP client to use for requests.
+/// - `url`: URL to request.
+///
+/// Output:
+/// - `Result<String>` containing HTML text, or an error.
+///
+/// Details:
+/// - Internal helper function that performs the HTTP request
+/// - Used by both retry and non-retry code paths
+async fn perform_comments_request(client: &ReqwestClient, url: &str) -> Result<String> {
     // Create request with browser-like headers
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -67,7 +126,7 @@ pub async fn comments(client: &Client, pkgname: &str) -> Result<Vec<AurComment>>
     );
     headers.insert(ACCEPT_LANGUAGE, HeaderValue::from_static("en-US,en;q=0.5"));
 
-    let response = match client.get(&url).headers(headers).send().await {
+    let response = match client.get(url).headers(headers).send().await {
         Ok(resp) => {
             reset_archlinux_backoff();
             resp
@@ -77,6 +136,9 @@ pub async fn comments(client: &Client, pkgname: &str) -> Result<Vec<AurComment>>
             return Err(ArchToolkitError::Network(e));
         }
     };
+
+    // Check for Retry-After header before consuming response
+    let _retry_after = extract_retry_after(&response);
 
     let response = match response.error_for_status() {
         Ok(resp) => resp,
@@ -94,8 +156,24 @@ pub async fn comments(client: &Client, pkgname: &str) -> Result<Vec<AurComment>>
         }
     };
 
+    Ok(html_text)
+}
+
+/// What: Parse HTML and extract comments.
+///
+/// Inputs:
+/// - `html_text`: HTML text to parse.
+/// - `pkgname`: Package name for context.
+///
+/// Output:
+/// - `Result<Vec<AurComment>>` with parsed comments.
+///
+/// Details:
+/// - Internal helper function that parses HTML and extracts comments
+/// - Separated from request logic for reuse
+fn parse_comments_html(html_text: &str, pkgname: &str) -> Result<Vec<AurComment>> {
     // Parse HTML
-    let document = Html::parse_document(&html_text);
+    let document = Html::parse_document(html_text);
 
     // AUR comments structure:
     // - Each comment has an <h4 class="comment-header"> with author and date
@@ -146,7 +224,7 @@ pub async fn comments(client: &Client, pkgname: &str) -> Result<Vec<AurComment>>
             document: &document,
             date_selector: &date_selector,
             pkgname,
-            html_text: &html_text,
+            html_text,
             has_pinned_section,
             latest_comments_pos,
         };

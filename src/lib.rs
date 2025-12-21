@@ -18,12 +18,11 @@
 //! ## Basic AUR Search
 //!
 //! ```no_run
-//! use arch_toolkit::aur;
-//! use reqwest::Client;
+//! use arch_toolkit::ArchClient;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let client = Client::new();
-//! let packages = aur::search(&client, "yay").await?;
+//! let client = ArchClient::new()?;
+//! let packages = client.aur().search("yay").await?;
 //! println!("Found {} packages", packages.len());
 //! # Ok(())
 //! # }
@@ -32,12 +31,11 @@
 //! ## Fetch Package Details
 //!
 //! ```no_run
-//! use arch_toolkit::aur;
-//! use reqwest::Client;
+//! use arch_toolkit::ArchClient;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let client = Client::new();
-//! let details = aur::info(&client, &["yay", "paru"]).await?;
+//! let client = ArchClient::new()?;
+//! let details = client.aur().info(&["yay", "paru"]).await?;
 //! for pkg in details {
 //!     println!("{}: {}", pkg.name, pkg.description);
 //! }
@@ -45,15 +43,30 @@
 //! # }
 //! ```
 //!
+//! ## Custom Configuration
+//!
+//! ```no_run
+//! use arch_toolkit::ArchClient;
+//! use std::time::Duration;
+//!
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let client = ArchClient::builder()
+//!     .timeout(Duration::from_secs(60))
+//!     .user_agent("my-app/1.0")
+//!     .build()?;
+//! let packages = client.aur().search("yay").await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! ## Fetch Comments
 //!
 //! ```no_run
-//! use arch_toolkit::aur;
-//! use reqwest::Client;
+//! use arch_toolkit::ArchClient;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let client = Client::new();
-//! let comments = aur::comments(&client, "yay").await?;
+//! let client = ArchClient::new()?;
+//! let comments = client.aur().comments("yay").await?;
 //! for comment in comments.iter().take(5) {
 //!     println!("{}: {}", comment.author, comment.content);
 //! }
@@ -64,12 +77,11 @@
 //! ## Fetch PKGBUILD
 //!
 //! ```no_run
-//! use arch_toolkit::aur;
-//! use reqwest::Client;
+//! use arch_toolkit::ArchClient;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let client = Client::new();
-//! let pkgbuild = aur::pkgbuild(&client, "yay").await?;
+//! let client = ArchClient::new()?;
+//! let pkgbuild = client.aur().pkgbuild("yay").await?;
 //! println!("PKGBUILD:\n{}", pkgbuild);
 //! # Ok(())
 //! # }
@@ -84,6 +96,15 @@ pub mod aur;
 #[cfg(feature = "aur")]
 pub mod client;
 
+#[cfg(feature = "aur")]
+pub mod cache;
+
 // Re-export commonly used types
 pub use error::{ArchToolkitError as Error, Result};
 pub use types::{AurComment, AurPackage, AurPackageDetails};
+
+#[cfg(feature = "aur")]
+pub use client::{ArchClient, ArchClientBuilder, CacheInvalidator};
+
+#[cfg(feature = "aur")]
+pub use cache::{CacheConfig, CacheConfigBuilder};

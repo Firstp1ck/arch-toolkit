@@ -1,7 +1,11 @@
 //! AUR package info/details functionality.
 
 use crate::aur::utils::{arrs, s, u64_of};
-use crate::client::{is_archlinux_url, rate_limit_archlinux, reset_archlinux_backoff};
+use crate::cache::cache_key_info;
+use crate::client::{
+    ArchClient, extract_retry_after, is_archlinux_url, rate_limit_archlinux,
+    reset_archlinux_backoff, retry_with_policy,
+};
 use crate::error::{ArchToolkitError, Result};
 use crate::types::AurPackageDetails;
 use reqwest::Client;
@@ -11,7 +15,7 @@ use tracing::{debug, warn};
 /// What: Fetch detailed information for one or more AUR packages.
 ///
 /// Inputs:
-/// - `client`: HTTP client to use for requests.
+/// - `client`: `ArchClient` to use for requests.
 /// - `names`: Slice of package names to fetch info for.
 ///
 /// Output:
@@ -22,22 +26,37 @@ use tracing::{debug, warn};
 /// - Fetches info for all packages in a single request (more efficient).
 /// - Returns empty vector if no packages found (not an error).
 /// - Applies rate limiting for archlinux.org requests.
+/// - Uses retry policy if enabled for info operations.
+/// - Checks cache before making network request if caching is enabled.
 ///
 /// # Errors
 /// - Returns `Err(ArchToolkitError::Network)` if the HTTP request fails
 /// - Returns `Err(ArchToolkitError::InvalidInput)` if the URL is not from archlinux.org
-pub async fn info(client: &Client, names: &[&str]) -> Result<Vec<AurPackageDetails>> {
+pub async fn info(client: &ArchClient, names: &[&str]) -> Result<Vec<AurPackageDetails>> {
     if names.is_empty() {
         return Ok(Vec::new());
     }
 
-    // Build URL with multiple arg parameters
+    // Check cache if enabled
+    if let Some(cache_config) = client.cache_config()
+        && cache_config.enable_info
+        && let Some(cache) = client.cache()
+    {
+        let cache_key = cache_key_info(names);
+        if let Some(cached) = cache.get::<Vec<AurPackageDetails>>(&cache_key) {
+            debug!(names = ?names, "cache hit for info");
+            return Ok(cached);
+        }
+    }
+
+    // Build URL with multiple arg parameters using array notation
+    // AUR RPC v5 requires arg[]=name1&arg[]=name2 format for multiple packages
     let mut url = String::from("https://aur.archlinux.org/rpc/v5/info?");
     for (i, name) in names.iter().enumerate() {
         if i > 0 {
             url.push('&');
         }
-        url.push_str("arg=");
+        url.push_str("arg[]=");
         url.push_str(name);
     }
 
@@ -52,7 +71,45 @@ pub async fn info(client: &Client, names: &[&str]) -> Result<Vec<AurPackageDetai
         )));
     };
 
-    let response = match client.get(&url).send().await {
+    let retry_policy = client.retry_policy();
+    let http_client = client.http_client();
+
+    // Wrap the request in retry logic if enabled
+    let result = if retry_policy.enabled && retry_policy.retry_info {
+        retry_with_policy(retry_policy, "info", || async {
+            perform_info_request(http_client, &url).await
+        })
+        .await
+    } else {
+        perform_info_request(http_client, &url).await
+    }?;
+
+    // Store in cache if enabled
+    if let Some(cache_config) = client.cache_config()
+        && cache_config.enable_info
+        && let Some(cache) = client.cache()
+    {
+        let cache_key = cache_key_info(names);
+        let _ = cache.set(&cache_key, &result, cache_config.info_ttl);
+    }
+
+    Ok(result)
+}
+
+/// What: Perform the actual info request without retry logic.
+///
+/// Inputs:
+/// - `client`: HTTP client to use for requests.
+/// - `url`: URL to request.
+///
+/// Output:
+/// - `Result<Vec<AurPackageDetails>>` containing package details, or an error.
+///
+/// Details:
+/// - Internal helper function that performs the HTTP request and parsing
+/// - Used by both retry and non-retry code paths
+async fn perform_info_request(client: &Client, url: &str) -> Result<Vec<AurPackageDetails>> {
+    let response = match client.get(url).send().await {
         Ok(resp) => {
             reset_archlinux_backoff();
             resp
@@ -62,6 +119,9 @@ pub async fn info(client: &Client, names: &[&str]) -> Result<Vec<AurPackageDetai
             return Err(ArchToolkitError::Network(e));
         }
     };
+
+    // Check for Retry-After header before consuming response
+    let _retry_after = extract_retry_after(&response);
 
     let response = match response.error_for_status() {
         Ok(resp) => resp,
@@ -159,11 +219,7 @@ pub async fn info(client: &Client, names: &[&str]) -> Result<Vec<AurPackageDetai
         }
     }
 
-    debug!(
-        requested = names.len(),
-        found = packages.len(),
-        "AUR info fetch completed"
-    );
+    debug!(found = packages.len(), "AUR info fetch completed");
 
     Ok(packages)
 }
