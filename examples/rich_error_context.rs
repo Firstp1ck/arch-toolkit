@@ -92,6 +92,15 @@ async fn main() -> Result<()> {
 
     let _ = demonstrate_error_comparison();
 
+    // ========================================================================
+    // Example 6: Input Validation Errors
+    // ========================================================================
+    println!("\n┌─ Example 6: Input Validation Errors ────────────────────────┐");
+    println!("│ Structured validation errors with clear messages             │");
+    println!("└──────────────────────────────────────────────────────────────┘\n");
+
+    demonstrate_validation_errors(&client).await?;
+
     println!("\n✓ All examples completed successfully!");
     Ok(())
 }
@@ -487,6 +496,10 @@ async fn demonstrate_practical_patterns(client: &ArchClient) -> Result<()> {
             ArchToolkitError::RateLimited { .. } => "Rate Limit Error",
             ArchToolkitError::PackageNotFound { .. } => "Not Found Error",
             ArchToolkitError::InvalidInput(_) => "Input Error",
+            ArchToolkitError::EmptyInput { .. } => "Validation Error",
+            ArchToolkitError::InvalidPackageName { .. } => "Validation Error",
+            ArchToolkitError::InvalidSearchQuery { .. } => "Validation Error",
+            ArchToolkitError::InputTooLong { .. } => "Validation Error",
         }
     }
 
@@ -556,6 +569,117 @@ fn demonstrate_error_comparison() -> Result<()> {
     println!("  Error 2: AUR search failed for query 'paru': connection timed out");
     println!("  Error 3: AUR search failed for query 'pacman': connection timed out");
     println!("  ✓ Clear: All three queries failed, but we know which ones!\n");
+
+    Ok(())
+}
+
+/// What: Demonstrate input validation error handling.
+///
+/// Inputs:
+/// - `client`: `ArchClient` instance
+///
+/// Output:
+/// - `Result<()>` indicating success or failure
+///
+/// Details:
+/// - Shows how validation errors provide clear, actionable messages
+/// - Demonstrates different validation error types
+/// - Shows strict vs lenient mode behavior
+async fn demonstrate_validation_errors(client: &ArchClient) -> Result<()> {
+    println!("Input Validation Error Handling:");
+    println!("─────────────────────────────────\n");
+
+    // Example 1: Empty input (strict mode)
+    println!("Example 1: Empty Search Query (Strict Mode)");
+    println!("───────────────────────────────────────────\n");
+    match client.aur().search("").await {
+        Err(ArchToolkitError::EmptyInput { field, message }) => {
+            println!("✅ Validation caught empty input:");
+            println!("   Field: {field}");
+            println!("   Message: {message}\n");
+        }
+        Ok(_) => println!("⚠️  Unexpected: Empty query returned results (lenient mode?)\n"),
+        Err(e) => println!("❌ Unexpected error: {e}\n"),
+    }
+
+    // Example 2: Invalid package name
+    println!("Example 2: Invalid Package Name");
+    println!("───────────────────────────────\n");
+    match client.aur().info(&["-invalid-package"]).await {
+        Err(ArchToolkitError::InvalidPackageName { name, reason }) => {
+            println!("✅ Validation caught invalid package name:");
+            println!("   Package: {name}");
+            println!("   Reason: {reason}\n");
+        }
+        Ok(_) => println!("⚠️  Unexpected: Invalid package name was accepted\n"),
+        Err(e) => println!("❌ Unexpected error: {e}\n"),
+    }
+
+    // Example 3: Package name with uppercase
+    println!("Example 3: Package Name with Uppercase");
+    println!("─────────────────────────────────────\n");
+    match client.aur().comments("InvalidPackage").await {
+        Err(ArchToolkitError::InvalidPackageName { name, reason }) => {
+            println!("✅ Validation caught invalid character:");
+            println!("   Package: {name}");
+            println!("   Reason: {reason}\n");
+        }
+        Ok(_) => println!("⚠️  Unexpected: Uppercase package name was accepted\n"),
+        Err(e) => println!("❌ Unexpected error: {e}\n"),
+    }
+
+    // Example 4: Too long input
+    println!("Example 4: Input Too Long");
+    println!("─────────────────────────\n");
+    let long_query = "a".repeat(300); // Exceeds default max of 256
+    match client.aur().search(&long_query).await {
+        Err(ArchToolkitError::InputTooLong {
+            field,
+            max_length,
+            actual_length,
+        }) => {
+            println!("✅ Validation caught input that's too long:");
+            println!("   Field: {field}");
+            println!("   Max length: {max_length} characters");
+            println!("   Actual length: {actual_length} characters\n");
+        }
+        Ok(_) => println!("⚠️  Unexpected: Too long query was accepted\n"),
+        Err(e) => println!("❌ Unexpected error: {e}\n"),
+    }
+
+    // Example 5: Lenient mode (if configured)
+    println!("Example 5: Lenient Mode Configuration");
+    println!("─────────────────────────────────────\n");
+    println!("To use lenient mode (allow empty inputs):");
+    println!("  let client = ArchClient::builder()");
+    println!("      .validation_config(ValidationConfig {{");
+    println!("          strict_empty: false,");
+    println!("          ..Default::default()");
+    println!("      }})");
+    println!("      .build()?;\n");
+    println!("In lenient mode, empty inputs return empty results");
+    println!("instead of validation errors.\n");
+
+    // Example 6: Valid inputs
+    println!("Example 6: Valid Inputs");
+    println!("───────────────────────\n");
+    println!("Valid package names pass validation:");
+    let valid_names = ["yay", "paru", "linux-zen", "lib32-mesa"];
+    for name in &valid_names {
+        match client.aur().info(&[name]).await {
+            Ok(_) | Err(ArchToolkitError::PackageNotFound { .. }) => {
+                println!("   ✓ '{name}' - Valid format (may not exist in AUR)");
+            }
+            Err(ArchToolkitError::InvalidPackageName { .. }) => {
+                println!("   ❌ '{name}' - Unexpectedly rejected");
+            }
+            Err(_) => {
+                // Network errors are fine - we're just checking validation
+                println!("   ✓ '{name}' - Valid format (network error is OK)");
+            }
+        }
+    }
+    println!();
 
     Ok(())
 }

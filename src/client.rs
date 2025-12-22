@@ -11,6 +11,8 @@ use rand::Rng;
 use tracing::{debug, warn};
 
 #[cfg(feature = "aur")]
+use crate::aur::validation::ValidationConfig;
+#[cfg(feature = "aur")]
 use crate::cache::{CacheConfig, CacheWrapper};
 #[cfg(feature = "aur")]
 use crate::error::{ArchToolkitError, Result};
@@ -518,6 +520,8 @@ pub struct ArchClient {
     cache: Option<CacheWrapper>,
     /// Cache configuration (stored for cache invalidation).
     cache_config: Option<CacheConfig>,
+    /// Validation configuration.
+    validation_config: ValidationConfig,
 }
 
 #[cfg(feature = "aur")]
@@ -624,6 +628,19 @@ impl ArchClient {
     /// - Used internally by AUR operations to check per-operation cache settings
     pub(crate) const fn cache_config(&self) -> Option<&CacheConfig> {
         self.cache_config.as_ref()
+    }
+
+    /// What: Get the validation configuration (for internal use).
+    ///
+    /// Inputs: None
+    ///
+    /// Output:
+    /// - Reference to the validation configuration
+    ///
+    /// Details:
+    /// - Used internally by AUR operations to validate inputs
+    pub(crate) const fn validation_config(&self) -> &ValidationConfig {
+        &self.validation_config
     }
 
     /// What: Invalidate cache entries.
@@ -812,6 +829,8 @@ pub struct ArchClientBuilder {
     retry_policy: Option<RetryPolicy>,
     /// Cache configuration (default: None, caching disabled).
     cache_config: Option<CacheConfig>,
+    /// Validation configuration (default: `ValidationConfig::default()`).
+    validation_config: Option<ValidationConfig>,
 }
 
 #[cfg(feature = "aur")]
@@ -833,6 +852,7 @@ impl ArchClientBuilder {
             user_agent: None,
             retry_policy: None,
             cache_config: None,
+            validation_config: None,
         }
     }
 
@@ -976,6 +996,24 @@ impl ArchClientBuilder {
         self
     }
 
+    /// What: Set the validation configuration.
+    ///
+    /// Inputs:
+    /// - `config`: Validation configuration to use
+    ///
+    /// Output:
+    /// - `Self` for method chaining
+    ///
+    /// Details:
+    /// - Overrides default validation configuration
+    /// - If not set, uses `ValidationConfig::default()` (strict mode)
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // Cannot be const: mutates self
+    pub fn validation_config(mut self, config: ValidationConfig) -> Self {
+        self.validation_config = Some(config);
+        self
+    }
+
     /// What: Build the `ArchClient` with the configured settings.
     ///
     /// Inputs: None
@@ -998,6 +1036,7 @@ impl ArchClientBuilder {
             .user_agent
             .unwrap_or_else(|| DEFAULT_USER_AGENT.to_string());
         let retry_policy = self.retry_policy.unwrap_or_default();
+        let validation_config = self.validation_config.unwrap_or_default();
 
         let http_client = ReqwestClient::builder()
             .timeout(timeout)
@@ -1020,6 +1059,7 @@ impl ArchClientBuilder {
             retry_policy,
             cache,
             cache_config: self.cache_config,
+            validation_config,
         })
     }
 }

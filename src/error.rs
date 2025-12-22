@@ -81,6 +81,42 @@ pub enum ArchToolkitError {
     /// Invalid input parameter.
     #[error("Invalid input: {0}")]
     InvalidInput(String),
+
+    /// Empty input provided where a value is required.
+    #[error("Empty {field}: {message}")]
+    EmptyInput {
+        /// The field name that is empty.
+        field: String,
+        /// Detailed message about why the field cannot be empty.
+        message: String,
+    },
+
+    /// Package name contains invalid characters or format.
+    #[error("Invalid package name '{name}': {reason}")]
+    InvalidPackageName {
+        /// The invalid package name.
+        name: String,
+        /// Reason why the package name is invalid.
+        reason: String,
+    },
+
+    /// Search query validation failed.
+    #[error("Invalid search query: {reason}")]
+    InvalidSearchQuery {
+        /// Reason why the search query is invalid.
+        reason: String,
+    },
+
+    /// Input exceeds maximum length.
+    #[error("{field} exceeds maximum length of {max_length} characters (got {actual_length})")]
+    InputTooLong {
+        /// The field name that is too long.
+        field: String,
+        /// Maximum allowed length.
+        max_length: usize,
+        /// Actual length of the input.
+        actual_length: usize,
+    },
 }
 
 impl ArchToolkitError {

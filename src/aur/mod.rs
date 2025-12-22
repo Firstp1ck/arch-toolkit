@@ -14,6 +14,8 @@ mod search;
 mod traits;
 #[cfg(feature = "aur")]
 pub mod utils;
+#[cfg(feature = "aur")]
+pub mod validation;
 
 #[cfg(feature = "aur")]
 use crate::client::ArchClient;

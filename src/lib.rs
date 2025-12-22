@@ -111,3 +111,6 @@ pub use client::{ArchClient, ArchClientBuilder, CacheInvalidator};
 
 #[cfg(feature = "aur")]
 pub use cache::{CacheConfig, CacheConfigBuilder};
+
+#[cfg(feature = "aur")]
+pub use aur::validation::ValidationConfig;

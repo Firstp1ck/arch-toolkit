@@ -1,6 +1,7 @@
 //! AUR search functionality.
 
 use crate::aur::utils::{percent_encode, s};
+use crate::aur::validation::validate_search_query;
 use crate::cache::cache_key_search;
 use crate::client::{
     ArchClient, extract_retry_after, is_archlinux_url, rate_limit_archlinux,
@@ -33,8 +34,14 @@ use tracing::{debug, warn};
 /// # Errors
 /// - Returns `Err(ArchToolkitError::Network)` if the HTTP request fails
 /// - Returns `Err(ArchToolkitError::InvalidInput)` if the URL is not from archlinux.org
+/// - Returns `Err(ArchToolkitError::EmptyInput)` if query is empty and strict mode is enabled
+/// - Returns `Err(ArchToolkitError::InputTooLong)` if query exceeds maximum length
 pub async fn search(client: &ArchClient, query: &str) -> Result<Vec<AurPackage>> {
-    let trimmed_query = query.trim();
+    // Validate input
+    let validation_config = client.validation_config();
+    let trimmed_query = validate_search_query(query, Some(validation_config))?;
+
+    // In lenient mode, empty queries return empty results
     if trimmed_query.is_empty() {
         return Ok(Vec::new());
     }

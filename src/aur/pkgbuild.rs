@@ -1,6 +1,7 @@
 //! PKGBUILD fetching functionality.
 
 use crate::aur::utils::percent_encode;
+use crate::aur::validation::validate_package_name;
 use crate::cache::cache_key_pkgbuild;
 use crate::client::{
     ArchClient, extract_retry_after, is_archlinux_url, rate_limit_archlinux,
@@ -40,7 +41,13 @@ const PKGBUILD_MIN_INTERVAL_MS: u64 = 200;
 /// - Returns `Err(ArchToolkitError::Network)` if the HTTP request fails
 /// - Returns `Err(ArchToolkitError::InvalidInput)` if the URL is not from archlinux.org
 /// - Returns `Err(ArchToolkitError::Parse)` if rate limiter mutex is poisoned
+/// - Returns `Err(ArchToolkitError::EmptyInput)` if package name is empty and strict mode is enabled
+/// - Returns `Err(ArchToolkitError::InvalidPackageName)` if package name is invalid
+/// - Returns `Err(ArchToolkitError::InputTooLong)` if package name exceeds maximum length
 pub async fn pkgbuild(client: &ArchClient, package: &str) -> Result<String> {
+    // Validate input
+    let validation_config = client.validation_config();
+    validate_package_name(package, Some(validation_config))?;
     // Check cache if enabled
     if let Some(cache_config) = client.cache_config()
         && cache_config.enable_pkgbuild

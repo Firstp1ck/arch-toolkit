@@ -1,5 +1,6 @@
 //! AUR package comments fetching via web scraping.
 
+use crate::aur::validation::validate_package_name;
 use crate::cache::cache_key_comments;
 use crate::client::{
     ArchClient, extract_retry_after, is_archlinux_url, rate_limit_archlinux,
@@ -51,7 +52,13 @@ struct CommentExtractionContext<'a> {
 /// - Returns `Err(ArchToolkitError::Network)` if the HTTP request fails
 /// - Returns `Err(ArchToolkitError::InvalidInput)` if the URL is not from archlinux.org
 /// - Returns `Err(ArchToolkitError::Parse)` if HTML parsing fails
+/// - Returns `Err(ArchToolkitError::EmptyInput)` if package name is empty and strict mode is enabled
+/// - Returns `Err(ArchToolkitError::InvalidPackageName)` if package name is invalid
+/// - Returns `Err(ArchToolkitError::InputTooLong)` if package name exceeds maximum length
 pub async fn comments(client: &ArchClient, pkgname: &str) -> Result<Vec<AurComment>> {
+    // Validate input
+    let validation_config = client.validation_config();
+    validate_package_name(pkgname, Some(validation_config))?;
     // Check cache if enabled
     if let Some(cache_config) = client.cache_config()
         && cache_config.enable_comments

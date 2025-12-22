@@ -88,6 +88,30 @@ impl MockAurApi {
                     }
                 }
                 ArchToolkitError::InvalidInput(s) => ArchToolkitError::InvalidInput(s.clone()),
+                ArchToolkitError::EmptyInput { field, message } => ArchToolkitError::EmptyInput {
+                    field: field.clone(),
+                    message: message.clone(),
+                },
+                ArchToolkitError::InvalidPackageName { name, reason } => {
+                    ArchToolkitError::InvalidPackageName {
+                        name: name.clone(),
+                        reason: reason.clone(),
+                    }
+                }
+                ArchToolkitError::InvalidSearchQuery { reason } => {
+                    ArchToolkitError::InvalidSearchQuery {
+                        reason: reason.clone(),
+                    }
+                }
+                ArchToolkitError::InputTooLong {
+                    field,
+                    max_length,
+                    actual_length,
+                } => ArchToolkitError::InputTooLong {
+                    field: field.clone(),
+                    max_length: *max_length,
+                    actual_length: *actual_length,
+                },
             }),
         }
     }

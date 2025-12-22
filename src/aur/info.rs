@@ -1,6 +1,7 @@
 //! AUR package info/details functionality.
 
 use crate::aur::utils::{arrs, s, u64_of};
+use crate::aur::validation::validate_package_names;
 use crate::cache::cache_key_info;
 use crate::client::{
     ArchClient, extract_retry_after, is_archlinux_url, rate_limit_archlinux,
@@ -32,7 +33,15 @@ use tracing::{debug, warn};
 /// # Errors
 /// - Returns `Err(ArchToolkitError::Network)` if the HTTP request fails
 /// - Returns `Err(ArchToolkitError::InvalidInput)` if the URL is not from archlinux.org
+/// - Returns `Err(ArchToolkitError::EmptyInput)` if names slice is empty and strict mode is enabled
+/// - Returns `Err(ArchToolkitError::InvalidPackageName)` if any package name is invalid
+/// - Returns `Err(ArchToolkitError::InputTooLong)` if any package name exceeds maximum length
 pub async fn info(client: &ArchClient, names: &[&str]) -> Result<Vec<AurPackageDetails>> {
+    // Validate input
+    let validation_config = client.validation_config();
+    validate_package_names(names, Some(validation_config))?;
+
+    // In lenient mode, empty slice returns empty results
     if names.is_empty() {
         return Ok(Vec::new());
     }
