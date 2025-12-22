@@ -15,9 +15,15 @@ Complete Rust toolkit for Arch Linux package management. Provides a unified API 
   - Configurable retry policies with per-operation control
   - Optional caching layer (memory and disk)
 
+- **Dependency Parsing** (`deps` feature)
+  - Parse dependencies from PKGBUILD files (single-line and multi-line arrays)
+  - Parse dependencies from .SRCINFO files
+  - Parse dependency specifications with version constraints
+  - Parse pacman output for dependencies and conflicts
+  - Fetch .SRCINFO from AUR (requires `aur` feature)
+
 ### Planned Features
 
-- Dependency resolution and SRCINFO parsing
 - Package database queries
 - Installation command building
 - News feeds and security advisories
@@ -29,24 +35,31 @@ Add `arch-toolkit` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-arch-toolkit = "0.1.1"
+arch-toolkit = "0.1.2"
 ```
 
 ### Feature Flags
 
 - `aur` (default): AUR search, package info, comments, and PKGBUILD fetching
+- `deps`: Dependency parsing from PKGBUILD, .SRCINFO, and pacman output
 - `cache-disk`: Enable disk-based caching for persistence across restarts
 
 To disable default features:
 
 ```toml
-arch-toolkit = { version = "0.1.1", default-features = false, features = ["aur"] }
+arch-toolkit = { version = "0.1.2", default-features = false, features = ["aur"] }
+```
+
+To enable dependency parsing:
+
+```toml
+arch-toolkit = { version = "0.1.2", features = ["deps"] }
 ```
 
 To enable disk caching:
 
 ```toml
-arch-toolkit = { version = "0.1.1", features = ["cache-disk"] }
+arch-toolkit = { version = "0.1.2", features = ["cache-disk"] }
 ```
 
 ## Quick Start
@@ -175,6 +188,22 @@ let pkgbuild = client.aur().pkgbuild("yay").await?;
 println!("PKGBUILD:\n{}", pkgbuild);
 ```
 
+### Parse Dependencies
+
+Parse dependencies from PKGBUILD or .SRCINFO files:
+
+```rust
+use arch_toolkit::deps::{parse_pkgbuild_deps, parse_srcinfo_deps};
+
+// Parse PKGBUILD
+let pkgbuild = r"depends=('glibc' 'python>=3.10')";
+let (depends, makedepends, checkdepends, optdepends) = parse_pkgbuild_deps(pkgbuild);
+
+// Parse .SRCINFO
+let srcinfo = r"depends = glibc\ndepends = python>=3.10";
+let (depends, makedepends, checkdepends, optdepends) = parse_srcinfo_deps(srcinfo);
+```
+
 ### Health Checks
 
 Monitor AUR service status:
@@ -196,6 +225,8 @@ See the `examples/` directory for comprehensive examples:
 - `examples/with_caching.rs`: Caching layer usage
 - `examples/env_config.rs`: Environment variable configuration
 - `examples/health_check.rs`: Health check functionality
+- `examples/pkgbuild_example.rs`: PKGBUILD dependency parsing
+- `examples/srcinfo_example.rs`: .SRCINFO parsing and fetching
 
 Run examples with:
 
@@ -204,6 +235,8 @@ cargo run --example aur_example
 cargo run --example with_caching
 cargo run --example env_config
 cargo run --example health_check
+cargo run --example pkgbuild_example --features deps
+cargo run --example srcinfo_example --features deps
 ```
 
 ## API Documentation
