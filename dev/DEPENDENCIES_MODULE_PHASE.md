@@ -13,7 +13,7 @@ This document provides a detailed structured plan for implementing the Dependenc
 | **Estimated Effort** | 30-40 hours |
 | **Complexity** | High (system command execution, complex data structures) |
 | **Dependencies** | `types` module, optional `aur` module for AUR package resolution |
-| **Status** | ⏳ In Progress - Tasks 2.1.1, 2.1.2, 2.1.3 Complete ✅ |
+| **Status** | ⏳ In Progress - Tasks 2.1.1, 2.1.2, 2.1.3, 2.1.4 Complete ✅ |
 
 ## Current Progress
 
@@ -40,8 +40,19 @@ This document provides a detailed structured plan for implementing the Dependenc
   - Comprehensive unit tests (11 tests)
   - Example file `examples/srcinfo_example.rs` demonstrating all features
 
+- **Task 2.1.4: Port PKGBUILD Parsing** - Complete
+  - Created `src/deps/pkgbuild.rs` with parsing functions
+  - Ported `parse_pkgbuild_deps()` and `parse_pkgbuild_conflicts()` from Pacsea
+  - Handles single-line and multi-line bash array syntax
+  - Handles append syntax (depends+=) in PKGBUILD functions
+  - Filters .so virtual packages and invalid package names
+  - Automatic deduplication of dependencies and conflicts
+  - Comprehensive unit tests (21 tests, ported from Pacsea + additional edge cases)
+  - Example file `examples/pkgbuild_example.rs` with 16 usage examples
+  - Module exports updated in `src/deps/mod.rs`
+
 ### ⏳ In Progress
-- **Task 2.1.4: Port PKGBUILD Parsing** - Next up
+- **Task 2.2.1: Port Version Comparison** - Next up
 
 ### 📋 Planned
 - Phase 2.2-2.6 (Version utils, Query, Resolution, Integration, Testing)
@@ -461,12 +472,14 @@ impl Default for ResolverConfig {
 - [x] Add example file `examples/srcinfo_example.rs` demonstrating all features
 
 #### Task 2.1.4: Port PKGBUILD Parsing
-- [ ] Create `src/deps/pkgbuild.rs`
-- [ ] Port `parse_pkgbuild_deps()` from Pacsea's sandbox/parse.rs
-- [ ] Port `parse_pkgbuild_conflicts()` function
-- [ ] Handle bash array syntax (single-line and multi-line)
-- [ ] Filter .so virtual packages
-- [ ] Add unit tests with sample PKGBUILD content
+- [x] Create `src/deps/pkgbuild.rs`
+- [x] Port `parse_pkgbuild_deps()` from Pacsea's sandbox/parse.rs
+- [x] Port `parse_pkgbuild_conflicts()` function
+- [x] Handle bash array syntax (single-line and multi-line)
+- [x] Filter .so virtual packages
+- [x] Add unit tests with sample PKGBUILD content
+- [x] Add example file `examples/pkgbuild_example.rs`
+- [x] Update module exports in `src/deps/mod.rs`
 
 ### Phase 2.2: Version Utilities (Est: 4-6 hours)
 
@@ -617,7 +630,7 @@ tokio = { version = "1", features = ["rt", "time", "process"], optional = true }
 | ReverseRootSummary type coupling | Create standalone type | ✅ Resolved (Task 2.1.1) |
 | i18n dependency in parse.rs | Remove, use English-only labels | ✅ Resolved (Task 2.1.2) |
 | PKGBUILD cache access | Accept optional callback | ⏳ Pending (Task 2.4.1) |
-| Sandbox parse functions | Include in deps module | ⏳ Pending (Task 2.1.4) |
+| Sandbox parse functions | Include in deps module | ✅ Resolved (Task 2.1.4) |
 | Index module coupling | Accept parameters instead | ⏳ Pending (Task 2.3.1) |
 | System command execution | Direct std::process::Command | ⏳ Pending (Task 2.3.1) |
 
@@ -640,7 +653,7 @@ tokio = { version = "1", features = ["rt", "time", "process"], optional = true }
 ### Functionality
 - [x] Can parse dependency specifications with version constraints - ✅ Task 2.1.2
 - [x] Can parse .SRCINFO files and extract all dependency types - ✅ Task 2.1.3
-- [ ] Can parse PKGBUILD files and extract dependency arrays
+- [x] Can parse PKGBUILD files and extract dependency arrays - ✅ Task 2.1.4
 - [ ] Can query installed packages from pacman database
 - [ ] Can resolve dependencies for a list of packages
 - [ ] Can analyze reverse dependencies for removal operations
@@ -648,20 +661,20 @@ tokio = { version = "1", features = ["rt", "time", "process"], optional = true }
 - [x] Works without i18n (English-only output) - ✅ Task 2.1.2
 
 ### Code Quality
-- [x] All functions have rustdoc comments (What/Inputs/Output/Details) - ✅ Tasks 2.1.1, 2.1.2, 2.1.3
+- [x] All functions have rustdoc comments (What/Inputs/Output/Details) - ✅ Tasks 2.1.1, 2.1.2, 2.1.3, 2.1.4
 - [ ] Cyclomatic complexity < 25 for all functions
-- [x] cargo fmt produces no changes - ✅ Tasks 2.1.1, 2.1.2, 2.1.3
-- [x] cargo clippy produces no warnings - ✅ Tasks 2.1.1, 2.1.2, 2.1.3
-- [x] All tests pass (cargo test -- --test-threads=1) - ✅ Tasks 2.1.1, 2.1.2, 2.1.3
+- [x] cargo fmt produces no changes - ✅ Tasks 2.1.1, 2.1.2, 2.1.3, 2.1.4
+- [x] cargo clippy produces no warnings - ✅ Tasks 2.1.1, 2.1.2, 2.1.3, 2.1.4
+- [x] All tests pass (cargo test -- --test-threads=1) - ✅ Tasks 2.1.1, 2.1.2, 2.1.3, 2.1.4
 
 ### Testing
-- [x] Unit tests for all parsing functions - ✅ Tasks 2.1.2, 2.1.3
+- [x] Unit tests for all parsing functions - ✅ Tasks 2.1.2, 2.1.3, 2.1.4
 - [ ] Unit tests for version comparison
 - [ ] Integration tests with mock commands
-- [x] Example program demonstrating usage - ✅ Tasks 2.1.1, 2.1.3
+- [x] Example program demonstrating usage - ✅ Tasks 2.1.1, 2.1.3, 2.1.4
 
 ### Documentation
-- [x] Module-level documentation with examples - ✅ Tasks 2.1.1, 2.1.2, 2.1.3
+- [x] Module-level documentation with examples - ✅ Tasks 2.1.1, 2.1.2, 2.1.3, 2.1.4
 - [ ] README updated with deps module usage
 - [x] Feature flags documented - ✅ Tasks 2.1.1, 2.1.3 (deps feature, conditional aur feature)
 
@@ -701,9 +714,10 @@ Once the deps module is complete, Pacsea can:
 1. Add `arch-toolkit` with `features = ["aur", "deps"]`
 2. Replace `src/logic/deps/parse.rs` with `arch_toolkit::deps::parse_*`
 3. Replace `src/logic/deps/srcinfo.rs` with `arch_toolkit::deps::parse_srcinfo`
-4. Replace dependency resolution with `arch_toolkit::deps::DependencyResolver`
-5. Replace reverse deps with `arch_toolkit::deps::ReverseDependencyAnalyzer`
-6. Remove duplicated code
+4. Replace `src/logic/sandbox/parse.rs` PKGBUILD functions with `arch_toolkit::deps::parse_pkgbuild_*`
+5. Replace dependency resolution with `arch_toolkit::deps::DependencyResolver`
+6. Replace reverse deps with `arch_toolkit::deps::ReverseDependencyAnalyzer`
+7. Remove duplicated code
 
 ### Future Enhancements
 
