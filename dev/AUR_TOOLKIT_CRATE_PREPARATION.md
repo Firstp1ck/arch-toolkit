@@ -6,7 +6,7 @@ This document analyzes framework-agnostic modules in Pacsea (`src/sources/`, `sr
 
 **Phase 1 (MVP) - AUR Module: ✅ COMPLETED**
 
-- **Version**: v0.1.0 (published 2025-12-21)
+- **Version**: v0.1.2 (latest published 2025-12-22)
 - **Status**: Published to crates.io and ready for use
 - **Completed Features**:
   - ✅ Core infrastructure (types, error handling, HTTP client, builder pattern)
@@ -19,10 +19,31 @@ This document analyzes framework-agnostic modules in Pacsea (`src/sources/`, `sr
   - ✅ CI/CD workflows
   - ✅ Health check functionality
   - ✅ Environment variable configuration
+  - ✅ Input validation and prelude module (v0.1.1)
+  - ✅ Rich error context and trait-based design (v0.1.1)
 
-**Phase 2+ - Remaining Modules: ⏳ PLANNED**
+**Phase 2 - Dependencies Module: 🚧 IN PROGRESS**
 
-- Dependencies module (SRCINFO parsing, dependency resolution)
+- **Version**: v0.1.2 (published 2025-12-22)
+- **Status**: Partially complete - parsing functions implemented, resolution pending
+- **Completed Features**:
+  - ✅ Dependency type system (`Dependency`, `DependencySpec`, `DependencyStatus`, etc.)
+  - ✅ Dependency spec parsing (`parse_dep_spec`)
+  - ✅ Pacman output parsing (`parse_pacman_si_deps`, `parse_pacman_si_conflicts`)
+  - ✅ .SRCINFO parsing (`parse_srcinfo`, `parse_srcinfo_deps`, `parse_srcinfo_conflicts`)
+  - ✅ .SRCINFO fetching from AUR (`fetch_srcinfo` - requires `aur` feature)
+  - ✅ PKGBUILD parsing (`parse_pkgbuild_deps`, `parse_pkgbuild_conflicts`)
+  - ✅ Comprehensive examples and documentation
+- **Remaining Work**:
+  - ⏳ Version comparison utilities
+  - ⏳ Package querying (installed, upgradable)
+  - ⏳ Dependency resolution (tree building)
+  - ⏳ Reverse dependency analysis
+  - ⏳ AUR dependency queries
+  - **Detailed Plan**: [DEPENDENCIES_MODULE_PHASE.md](./DEPENDENCIES_MODULE_PHASE.md)
+
+**Phase 3+ - Remaining Modules: ⏳ PLANNED**
+
 - Index module (package database queries)
 - Install module (command building)
 - News module (RSS feeds, advisories)
@@ -64,20 +85,20 @@ Before proceeding, here's a comprehensive analysis of what already exists in the
 
 **No unified library crate exists** that combines:
 - ✅ AUR operations (search, info, comments, PKGBUILD)
-- ✅ Dependency resolution (SRCINFO parsing, tree building)
-- ✅ Package index queries (installed, official repos)
-- ✅ Installation command building
-- ✅ News feeds and advisories
-- ✅ PKGBUILD security analysis
+- 🚧 Dependency parsing (SRCINFO parsing ✅, tree building ⏳)
+- ⏳ Package index queries (installed, official repos)
+- ⏳ Installation command building
+- ⏳ News feeds and advisories
+- ⏳ PKGBUILD security analysis
 
 **Gaps in existing crates:**
 1. **Fragmented** - Need multiple crates for complete functionality
-2. **No dependency resolution** - Missing SRCINFO parsing and dep tree building
+2. **Partial dependency support** - SRCINFO parsing available ✅, but missing dependency tree building ⏳
 3. **No news/advisories** - No Arch news RSS or security advisory support
-4. **No comments** - AUR comment scraping not available
+4. **No comments** - AUR comment scraping not available (except arch-toolkit ✅)
 5. **No sandbox analysis** - PKGBUILD security analysis missing
-6. **No unified error types** - Each crate has its own error handling
-7. **No rate limiting** - Missing built-in rate limiting for archlinux.org
+6. **No unified error types** - Each crate has its own error handling (arch-toolkit provides unified errors ✅)
+7. **No rate limiting** - Missing built-in rate limiting for archlinux.org (arch-toolkit provides this ✅)
 8. **Applications vs Libraries** - Most are CLI tools, not reusable libraries
 
 ### Recommended Features to Include
@@ -94,10 +115,12 @@ Based on analysis of existing crates, here's what `arch-toolkit` should include:
    - ✅ Rate limiting (unique - not in other crates)
 
 2. **Dependency Resolution** (from Pacsea `src/logic/deps/`)
-   - ✅ SRCINFO parsing (`alpm-pkgbuild` exists but different focus)
-   - ✅ Dependency tree building (unique)
-   - ✅ Reverse dependency analysis (unique)
-   - ✅ Version constraint parsing
+   - ✅ SRCINFO parsing (`alpm-pkgbuild` exists but different focus) - **IMPLEMENTED in v0.1.2**
+   - ✅ Dependency spec parsing - **IMPLEMENTED in v0.1.2**
+   - ✅ PKGBUILD dependency parsing - **IMPLEMENTED in v0.1.2**
+   - ⏳ Dependency tree building (unique) - **IN PROGRESS**
+   - ⏳ Reverse dependency analysis (unique) - **PLANNED**
+   - ✅ Version constraint parsing - **IMPLEMENTED in v0.1.2**
 
 3. **Package Index** (from Pacsea `src/index/`)
    - ✅ Installed package queries
@@ -175,7 +198,7 @@ The proposed `arch-toolkit` would offer:
 
 ### ✅ Completed (Phase 1 - MVP)
 
-The AUR module has been successfully extracted and published as v0.1.0:
+The AUR module has been successfully extracted and published as v0.1.0 (updated to v0.1.2):
 
 1. **Core Infrastructure** ✅
    - Standalone types (`AurPackage`, `AurPackageDetails`, `AurComment`, `HealthStatus`, `ServiceStatus`)
@@ -207,6 +230,36 @@ The AUR module has been successfully extracted and published as v0.1.0:
    - Cache invalidation API (`CacheInvalidator` - manual cache management)
    - Utility functions (URL encoding, JSON parsing helpers)
    - Prelude module for convenient imports
+
+### 🚧 In Progress (Phase 2 - Dependencies Module)
+
+The dependencies module is partially complete in v0.1.2:
+
+1. **Dependency Parsing** ✅
+   - Dependency spec parsing (`parse_dep_spec`)
+   - Pacman output parsing (`parse_pacman_si_deps`, `parse_pacman_si_conflicts`)
+   - .SRCINFO parsing (`parse_srcinfo`, `parse_srcinfo_deps`, `parse_srcinfo_conflicts`)
+   - .SRCINFO fetching from AUR (`fetch_srcinfo` - requires `aur` feature)
+   - PKGBUILD parsing (`parse_pkgbuild_deps`, `parse_pkgbuild_conflicts`)
+
+2. **Dependency Types** ✅
+   - Comprehensive type system in `src/types/dependency.rs`
+   - `Dependency`, `DependencySpec`, `DependencyStatus`, `DependencySource`, etc.
+   - Helper methods and Display implementations
+
+3. **Examples & Documentation** ✅
+   - `examples/pkgbuild_example.rs` - 16 usage examples
+   - `examples/srcinfo_example.rs` - Comprehensive .SRCINFO examples
+   - Comprehensive unit tests
+
+**Remaining work for Phase 2:**
+- ⏳ Version comparison utilities
+- ⏳ Package querying (installed, upgradable)
+- ⏳ Dependency resolution (tree building)
+- ⏳ Reverse dependency analysis
+- ⏳ AUR dependency queries
+
+**Detailed Plan**: [DEPENDENCIES_MODULE_PHASE.md](./DEPENDENCIES_MODULE_PHASE.md)
 
 ### ⏳ Remaining Work (Future Phases)
 
@@ -496,10 +549,18 @@ arch-toolkit/
 
 **Detailed Plan**: [DEPENDENCIES_MODULE_PHASE.md](./DEPENDENCIES_MODULE_PHASE.md)
 
-- [ ] **Port dependency parsing** - From `src/logic/deps/parse.rs`
+- [x] **Port dependency parsing** - From `src/logic/deps/parse.rs`
+  - ✅ Implemented: `parse_dep_spec()`, `parse_pacman_si_deps()`, `parse_pacman_si_conflicts()` in `src/deps/parse.rs`
+- [x] **Port SRCINFO parsing** - From `src/logic/deps/srcinfo.rs`
+  - ✅ Implemented: `parse_srcinfo()`, `parse_srcinfo_deps()`, `parse_srcinfo_conflicts()` in `src/deps/srcinfo.rs`
+  - ✅ Implemented: `fetch_srcinfo()` for AUR integration (requires `aur` feature)
+- [x] **Port PKGBUILD parsing** - From `src/logic/deps/pkgbuild.rs` (via sandbox module)
+  - ✅ Implemented: `parse_pkgbuild_deps()`, `parse_pkgbuild_conflicts()` in `src/deps/pkgbuild.rs`
+- [x] **Define dependency types** - Create standalone types
+  - ✅ Implemented: Comprehensive type system in `src/types/dependency.rs` (9 types, 580 lines)
+- [ ] **Port version comparison utilities** - From `src/logic/deps/utils.rs`
 - [ ] **Port dependency resolution** - From `src/logic/deps/resolve.rs`
 - [ ] **Port reverse deps** - From `src/logic/deps/reverse.rs`
-- [ ] **Port SRCINFO parsing** - From `src/logic/deps/srcinfo.rs`
 - [ ] **Port AUR dependency queries** - From `src/logic/deps/aur.rs`
 
 #### Index Module (`feature = "index"`)
@@ -583,7 +644,8 @@ arch-toolkit/
 | Port comments/PKGBUILD | 3-4 hours | Medium |
 | Remove dependencies | 2-3 hours | Low |
 | **Dependencies Module** | | |
-| Port dependency logic | 6-8 hours | High |
+| Port dependency parsing | 4-6 hours | Medium | ✅ Complete (v0.1.2) |
+| Port dependency resolution | 6-8 hours | High | ⏳ Pending |
 | **Index Module** | | |
 | Port index queries | 4-6 hours | Medium |
 | **Install Module** | | |
@@ -610,7 +672,7 @@ arch-toolkit/
 # Cargo.toml
 [package]
 name = "arch-toolkit"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2024"
 description = "Complete Rust toolkit for Arch Linux package management"
 license = "MIT"
@@ -619,9 +681,10 @@ keywords = ["archlinux", "aur", "pacman", "package-manager"]
 categories = ["api-bindings", "command-line-utilities"]
 
 [features]
-default = ["aur", "deps"]
-aur = ["reqwest", "tokio", "scraper"]           # AUR RPC, comments, PKGBUILD
-deps = ["fuzzy-matcher"]                        # Dependency resolution
+default = ["aur"]
+aur = ["dep:reqwest", "dep:tokio", "dep:scraper", "dep:chrono", "dep:rand", "dep:lru", "dep:async-trait"]  # AUR RPC, comments, PKGBUILD
+deps = []                                       # Dependency parsing (types only, no additional deps)
+cache-disk = ["dep:dirs"]                      # Disk-based caching
 index = []                                      # Package database queries
 install = ["deps"]                              # Installation commands (requires deps)
 news = ["reqwest", "tokio", "chrono"]           # News feeds and advisories
@@ -737,19 +800,23 @@ async fn main() -> Result<(), arch_toolkit::Error> {
 ```toml
 # Minimal - just AUR search
 [dependencies]
-arch-toolkit = { version = "0.1", default-features = false, features = ["aur"] }
+arch-toolkit = { version = "0.1.2", default-features = false, features = ["aur"] }
 
-# Dependency resolution only
+# Dependency parsing only
 [dependencies]
-arch-toolkit = { version = "0.1", default-features = false, features = ["deps"] }
+arch-toolkit = { version = "0.1.2", default-features = false, features = ["deps"] }
 
-# Full TUI app (like Pacsea)
+# AUR + Dependency parsing
 [dependencies]
-arch-toolkit = { version = "0.1", features = ["full"] }
+arch-toolkit = { version = "0.1.2", features = ["aur", "deps"] }
 
-# CLI tool for package queries
+# Full TUI app (like Pacsea) - when all modules are complete
 [dependencies]
-arch-toolkit = { version = "0.1", features = ["aur", "index"] }
+arch-toolkit = { version = "0.1.2", features = ["full"] }
+
+# CLI tool for package queries - when index module is complete
+[dependencies]
+arch-toolkit = { version = "0.1.2", features = ["aur", "index"] }
 ```
 
 ### Benefits for Pacsea
@@ -759,7 +826,7 @@ Pacsea could then depend on `arch-toolkit` internally:
 ```toml
 # Pacsea's Cargo.toml
 [dependencies]
-arch-toolkit = { version = "0.1", features = ["full"] }
+arch-toolkit = { version = "0.1.2", features = ["aur", "deps"] }
 ratatui = "0.29"
 crossterm = "0.29"
 # ... UI-specific deps
@@ -777,22 +844,22 @@ This would:
 
 ### Phase 1 Status: ✅ COMPLETED
 
-The AUR module has been successfully extracted from Pacsea and published as `arch-toolkit v0.1.0`. All blockers have been resolved:
+The AUR module has been successfully extracted from Pacsea and published as `arch-toolkit v0.1.0` (current version: v0.1.2). All blockers have been resolved:
 
 1. ✅ **Decoupled from Pacsea types** - Created standalone types (`AurPackage`, `AurPackageDetails`, `AurComment`)
 2. ✅ **Replaced curl with reqwest** - All HTTP operations use standard `reqwest` client
 3. ✅ **Removed i18n dependency** - All operations return English-only data
 4. ✅ **Optional caching** - Caching is optional via `CacheConfig`, no hard dependencies
 
-### Remaining Modules
+### Phase 2 Status: 🚧 IN PROGRESS
 
-The following modules from Pacsea still need extraction (future phases):
+The Dependencies Module is partially complete in v0.1.2:
 
-1. **Dependencies Module** - SRCINFO parsing, dependency resolution, reverse deps
-2. **Index Module** - Installed package queries, official repo queries, mirror management
-3. **Install Module** - Pacman command building, AUR helper detection, batch operations
-4. **News Module** - Arch news RSS, security advisories
-5. **Sandbox Module** - PKGBUILD security analysis
+1. **Dependencies Module** - ✅ Parsing functions complete (SRCINFO, PKGBUILD, dependency specs), ⏳ Resolution and reverse deps pending
+2. **Index Module** - ⏳ Installed package queries, official repo queries, mirror management
+3. **Install Module** - ⏳ Pacman command building, AUR helper detection, batch operations
+4. **News Module** - ⏳ Arch news RSS, security advisories
+5. **Sandbox Module** - ⏳ PKGBUILD security analysis
 
 These modules may still have blockers similar to what the AUR module had:
 
@@ -804,12 +871,14 @@ These modules may still have blockers similar to what the AUR module had:
    - Most reusable and independent
    - Can be published and used immediately
    - Validates the approach
-   - **Status**: Published as v0.1.0 on 2025-12-21
+   - **Status**: Published as v0.1.0 on 2025-12-21, updated to v0.1.2 on 2025-12-22
 
-2. **Phase 2**: Add dependencies module (~30-40 hours) ⏳ **PLANNED**
+2. **Phase 2**: Add dependencies module (~30-40 hours) 🚧 **IN PROGRESS**
    - High reuse value
    - Complements AUR module
-   - **Status**: Detailed plan created
+   - **Status**: Parsing functions complete (v0.1.2), resolution pending
+   - **Completed**: Dependency types, parsing (specs, SRCINFO, PKGBUILD, pacman output)
+   - **Remaining**: Version utils, querying, resolution, reverse deps
    - **Plan Document**: [DEPENDENCIES_MODULE_PHASE.md](./DEPENDENCIES_MODULE_PHASE.md)
 
 3. **Phase 3**: Add remaining modules incrementally ⏳ **PLANNED**
@@ -828,7 +897,7 @@ These modules may still have blockers similar to what the AUR module had:
 
 ### Migration Strategy for Pacsea
 
-Now that `arch-toolkit v0.1.0` is published, Pacsea can:
+Now that `arch-toolkit v0.1.2` is published, Pacsea can:
 
 1. ✅ Add `arch-toolkit` as dependency with `features = ["aur"]`
 2. ⏳ Gradually replace AUR-related modules with toolkit calls
