@@ -276,17 +276,17 @@ function phase4_build_release
     
     cd "$ARCH_TOOLKIT_DIR"
     
-    # Step 3.1: Run cargo-dev (tests/checks)
-    log_step "Running cargo-dev (tests and checks)"
+    # Step 3.1: Run pre-commit checks (tests/checks)
+    log_step "Running pre-commit checks (tests and checks)"
     
-    dry_run_cmd "cargo-dev"
+    dry_run_cmd "make -C dev/ pre-commit"
     if test $status -ne 0
-        log_error "cargo-dev failed"
-        if not confirm_continue "Continue despite cargo-dev failure?"
+        log_error "pre-commit checks failed"
+        if not confirm_continue "Continue despite pre-commit failure?"
             return 1
         end
     else
-        log_success "cargo-dev passed"
+        log_success "pre-commit checks passed"
     end
     
     # Step 3.2: Build library with all features
@@ -468,12 +468,11 @@ function check_prerequisites
         set missing $missing "git"
     end
     
-    # python3 not required for library releases
-    
-    # Check for fish functions
-    if not functions -q cargo-dev
-        log_warn "Fish function 'cargo-dev' not found"
+    if not command -q make
+        set missing $missing "make"
     end
+    
+    # python3 not required for library releases
     
     if test -n "$missing"
         log_error "Missing required commands: $missing"
@@ -672,11 +671,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     # Create a temporary file for the new changelog
     set -l tmp_file (mktemp)
     
-    # Find the first --- separator line number
-    set -l header_end (grep -n '^---$' "$changelog_file" | head -1 | cut -d: -f1)
+    # Check if file starts with a header (like "# Changelog")
+    set -l first_line (head -n 1 "$changelog_file")
+    set -l header_end 0
     
-    if test -n "$header_end"
-        # Write header (up to and including first ---)
+    if string match -qr '^#\s+Changelog' "$first_line"
+        # File has a header, find where it ends (first blank line or first "## [version]" entry)
+        set -l line_num 1
+        while read -l line
+            set line_num (math $line_num + 1)
+            # Stop at first version entry (## [version])
+            if string match -qr '^##\s*\[.*\]' "$line"
+                set header_end (math $line_num - 1)
+                break
+            end
+            # If we hit a blank line after some header content, check if next line is a version entry
+            if test -z (string trim "$line"); and test $line_num -gt 2
+                # Check next line
+                set -l next_line (sed -n (math $line_num + 1)p "$changelog_file")
+                if string match -qr '^##\s*\[.*\]' "$next_line"
+                    set header_end $line_num
+                    break
+                end
+            end
+        end < "$changelog_file"
+    end
+    
+    # Insert new release at the top (after header if it exists)
+    if test $header_end -gt 0
+        # Write header (up to header_end)
         head -n $header_end "$changelog_file" > "$tmp_file"
         
         # Add blank line and new entry header
@@ -690,14 +713,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
         # Add separator
         echo "" >> "$tmp_file"
         echo "---" >> "$tmp_file"
+        echo "" >> "$tmp_file"
         
-        # Append rest of changelog (after first ---)
-        tail -n +$header_end "$changelog_file" | tail -n +2 >> "$tmp_file"
-        
-        # Replace original file
-        mv "$tmp_file" "$changelog_file"
+        # Append rest of changelog (after header)
+        tail -n +$header_end "$changelog_file" | tail -n +1 >> "$tmp_file"
     else
-        # No header found, prepend new entry
+        # No header found, prepend new entry at the very top
         echo "## [$new_ver] - $release_date" > "$tmp_file"
         echo "" >> "$tmp_file"
         cat "$release_file" >> "$tmp_file"
@@ -705,8 +726,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
         echo "---" >> "$tmp_file"
         echo "" >> "$tmp_file"
         cat "$changelog_file" >> "$tmp_file"
-        mv "$tmp_file" "$changelog_file"
     end
+    
+    # Replace original file
+    mv "$tmp_file" "$changelog_file"
     
     log_success "CHANGELOG.md updated"
     return 0

@@ -1,3 +1,151 @@
+# Changelog
+
+All notable changes to arch-toolkit will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.1.2] - 2025-12-22
+
+# Release v0.1.2 - Dependency Parsing
+
+**Release Date**: 2025-12-22
+
+## 🚀 What's New
+
+This release introduces comprehensive dependency parsing capabilities, allowing you to extract and analyze dependencies from PKGBUILD files, .SRCINFO files, and pacman output.
+
+### ✨ New Features
+
+**Dependency Parsing Module (`deps` feature)**
+- Parse dependencies from PKGBUILD files
+  - Supports single-line and multi-line bash array syntax
+  - Handles append syntax (`depends+=`) in PKGBUILD functions
+  - Extracts `depends`, `makedepends`, `checkdepends`, and `optdepends`
+  - Automatic filtering of virtual packages (.so files)
+  - Automatic deduplication of dependencies
+- Parse dependencies from .SRCINFO files
+  - Extract structured data from .SRCINFO content
+  - Handle architecture-specific dependencies
+  - Support for split packages
+  - Fetch .SRCINFO from AUR (requires `aur` feature)
+- Parse dependency specifications
+  - Parse dependency specs with version constraints (e.g., `package>=1.2.3`)
+  - Parse pacman `-Si` output for dependencies and conflicts
+  - Handle multi-line dependencies and deduplication
+
+**Dependency Types**
+- Comprehensive type system for dependency management
+- Support for dependency status, sources, and specifications
+- Ready for future dependency resolution features
+
+### 📚 Examples
+
+Two new example files demonstrate the parsing capabilities:
+- `examples/pkgbuild_example.rs` - 16 usage examples for PKGBUILD parsing
+- `examples/srcinfo_example.rs` - Comprehensive .SRCINFO parsing examples
+
+## Quick Start
+
+### Parsing PKGBUILD Files
+
+```rust
+use arch_toolkit::deps::parse_pkgbuild_deps;
+
+let pkgbuild = r"
+depends=('glibc' 'python>=3.10')
+makedepends=('make' 'gcc')
+";
+
+let (depends, makedepends, checkdepends, optdepends) = parse_pkgbuild_deps(pkgbuild);
+println!("Runtime dependencies: {:?}", depends);
+```
+
+### Parsing .SRCINFO Files
+
+```rust
+use arch_toolkit::deps::{parse_srcinfo, parse_srcinfo_deps};
+
+let srcinfo = r"
+pkgbase = example-package
+depends = glibc
+depends = python>=3.10
+makedepends = make
+";
+
+// Parse full .SRCINFO into structured data
+let data = parse_srcinfo(srcinfo)?;
+
+// Or just extract dependencies
+let (depends, makedepends, checkdepends, optdepends) = parse_srcinfo_deps(srcinfo);
+```
+
+### Fetching .SRCINFO from AUR
+
+```rust
+use arch_toolkit::deps::fetch_srcinfo;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let srcinfo = fetch_srcinfo("yay").await?;
+    let data = parse_srcinfo(&srcinfo)?;
+    println!("Package: {}", data.pkgbase);
+    Ok(())
+}
+```
+
+### Parsing Dependency Specifications
+
+```rust
+use arch_toolkit::deps::parse_dep_spec;
+
+let spec = "python>=3.10";
+let dep = parse_dep_spec(spec)?;
+println!("Package: {}, Version: {:?}", dep.name, dep.version);
+```
+
+## Installation
+
+```bash
+cargo add arch-toolkit@0.1.2 --features deps
+```
+
+Or update your `Cargo.toml`:
+
+```toml
+[dependencies]
+arch-toolkit = { version = "0.1.2", features = ["deps"] }
+```
+
+For AUR integration (fetching .SRCINFO):
+
+```toml
+[dependencies]
+arch-toolkit = { version = "0.1.2", features = ["deps", "aur"] }
+```
+
+## Migration from v0.1.1
+
+No breaking changes! This is a backward-compatible release. All existing code will continue to work.
+
+**New capabilities:**
+- Enable the `deps` feature to access dependency parsing functions
+- Use `parse_pkgbuild_deps()` to extract dependencies from PKGBUILD files
+- Use `parse_srcinfo()` or `fetch_srcinfo()` for .SRCINFO parsing
+- Check out the example files for comprehensive usage patterns
+
+## Documentation
+
+- [Full API Documentation](https://docs.rs/arch-toolkit/0.1.2)
+- [GitHub Repository](https://github.com/Firstp1ck/arch-toolkit)
+- [Examples](https://github.com/Firstp1ck/arch-toolkit/tree/main/examples)
+
+## Feedback
+
+Found a bug or have a feature request? Open an issue on [GitHub](https://github.com/Firstp1ck/arch-toolkit/issues)!
+
+---
+
 ## [0.1.1] - 2025-12-22
 
 # Release v0.1.1 - Developer Experience & Robustness
@@ -175,164 +323,6 @@ Found a bug or have a feature request? Open an issue on [GitHub](https://github.
 
 ---
 
-## [0.1.2] - 2025-12-22
-
-# Release v0.1.2 - Dependency Parsing
-
-**Release Date**: 2025-01-XX
-
-## 🚀 What's New
-
-This release introduces comprehensive dependency parsing capabilities, allowing you to extract and analyze dependencies from PKGBUILD files, .SRCINFO files, and pacman output.
-
-### ✨ New Features
-
-**Dependency Parsing Module (`deps` feature)**
-- Parse dependencies from PKGBUILD files
-  - Supports single-line and multi-line bash array syntax
-  - Handles append syntax (`depends+=`) in PKGBUILD functions
-  - Extracts `depends`, `makedepends`, `checkdepends`, and `optdepends`
-  - Automatic filtering of virtual packages (.so files)
-  - Automatic deduplication of dependencies
-- Parse dependencies from .SRCINFO files
-  - Extract structured data from .SRCINFO content
-  - Handle architecture-specific dependencies
-  - Support for split packages
-  - Fetch .SRCINFO from AUR (requires `aur` feature)
-- Parse dependency specifications
-  - Parse dependency specs with version constraints (e.g., `package>=1.2.3`)
-  - Parse pacman `-Si` output for dependencies and conflicts
-  - Handle multi-line dependencies and deduplication
-
-**Dependency Types**
-- Comprehensive type system for dependency management
-- Support for dependency status, sources, and specifications
-- Ready for future dependency resolution features
-
-### 📚 Examples
-
-Two new example files demonstrate the parsing capabilities:
-- `examples/pkgbuild_example.rs` - 16 usage examples for PKGBUILD parsing
-- `examples/srcinfo_example.rs` - Comprehensive .SRCINFO parsing examples
-
-## Quick Start
-
-### Parsing PKGBUILD Files
-
-```rust
-use arch_toolkit::deps::parse_pkgbuild_deps;
-
-let pkgbuild = r"
-depends=('glibc' 'python>=3.10')
-makedepends=('make' 'gcc')
-";
-
-let (depends, makedepends, checkdepends, optdepends) = parse_pkgbuild_deps(pkgbuild);
-println!("Runtime dependencies: {:?}", depends);
-```
-
-### Parsing .SRCINFO Files
-
-```rust
-use arch_toolkit::deps::{parse_srcinfo, parse_srcinfo_deps};
-
-let srcinfo = r"
-pkgbase = example-package
-depends = glibc
-depends = python>=3.10
-makedepends = make
-";
-
-// Parse full .SRCINFO into structured data
-let data = parse_srcinfo(srcinfo)?;
-
-// Or just extract dependencies
-let (depends, makedepends, checkdepends, optdepends) = parse_srcinfo_deps(srcinfo);
-```
-
-### Fetching .SRCINFO from AUR
-
-```rust
-use arch_toolkit::deps::fetch_srcinfo;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let srcinfo = fetch_srcinfo("yay").await?;
-    let data = parse_srcinfo(&srcinfo)?;
-    println!("Package: {}", data.pkgbase);
-    Ok(())
-}
-```
-
-### Parsing Dependency Specifications
-
-```rust
-use arch_toolkit::deps::parse_dep_spec;
-
-let spec = "python>=3.10";
-let dep = parse_dep_spec(spec)?;
-println!("Package: {}, Version: {:?}", dep.name, dep.version);
-```
-
-## Installation
-
-```bash
-cargo add arch-toolkit@0.1.2 --features deps
-```
-
-Or update your `Cargo.toml`:
-
-```toml
-[dependencies]
-arch-toolkit = { version = "0.1.2", features = ["deps"] }
-```
-
-For AUR integration (fetching .SRCINFO):
-
-```toml
-[dependencies]
-arch-toolkit = { version = "0.1.2", features = ["deps", "aur"] }
-```
-
-## Migration from v0.1.1
-
-No breaking changes! This is a backward-compatible release. All existing code will continue to work.
-
-**New capabilities:**
-- Enable the `deps` feature to access dependency parsing functions
-- Use `parse_pkgbuild_deps()` to extract dependencies from PKGBUILD files
-- Use `parse_srcinfo()` or `fetch_srcinfo()` for .SRCINFO parsing
-- Check out the example files for comprehensive usage patterns
-
-## Documentation
-
-- [Full API Documentation](https://docs.rs/arch-toolkit/0.1.2)
-- [GitHub Repository](https://github.com/Firstp1ck/arch-toolkit)
-- [Examples](https://github.com/Firstp1ck/arch-toolkit/tree/main/examples)
-
-## Feedback
-
-Found a bug or have a feature request? Open an issue on [GitHub](https://github.com/Firstp1ck/arch-toolkit/issues)!
-
----
-
-**Full Changelog**: See [CHANGELOG.md](../CHANGELOG.md) for detailed technical changes.
-
-
----
-
-**Full Changelog**: See [CHANGELOG.md](../CHANGELOG.md) for detailed technical changes.
-
-
----
-
-# Changelog
-
-All notable changes to arch-toolkit will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
 ## [0.1.0] - 2025-12-21
 
 ### Added
@@ -453,4 +443,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cache design**: Generic `Cache<K, V>` trait for extensibility
 
 [0.1.0]: https://github.com/Firstp1ck/arch-toolkit/releases/tag/v0.1.0
-
