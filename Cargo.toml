@@ -10,7 +10,7 @@ categories = ["api-bindings", "command-line-utilities"]
 
 [features]
 default = ["aur"]
-aur = ["dep:reqwest", "dep:tokio", "dep:scraper", "dep:chrono", "dep:rand", "dep:lru"]
+aur = ["dep:reqwest", "dep:tokio", "dep:scraper", "dep:chrono", "dep:rand", "dep:lru", "dep:async-trait"]
 cache-disk = ["dep:dirs"]
 
 [dependencies]
@@ -35,6 +35,9 @@ rand = { version = "0.9", optional = true }
 
 # LRU cache (for cache feature)
 lru = { version = "0.12", optional = true }
+
+# Async trait support (for aur feature)
+async-trait = { version = "0.1", optional = true }
 
 # Directory utilities (for cache-disk feature)
 dirs = { version = "5.0", optional = true }

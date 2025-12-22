@@ -5,9 +5,13 @@ mod comments;
 #[cfg(feature = "aur")]
 mod info;
 #[cfg(feature = "aur")]
+mod mock;
+#[cfg(feature = "aur")]
 mod pkgbuild;
 #[cfg(feature = "aur")]
 mod search;
+#[cfg(feature = "aur")]
+mod traits;
 #[cfg(feature = "aur")]
 pub mod utils;
 
@@ -17,6 +21,11 @@ use crate::client::ArchClient;
 use crate::error::Result;
 #[cfg(feature = "aur")]
 use crate::types::{AurComment, AurPackage, AurPackageDetails};
+
+#[cfg(feature = "aur")]
+pub use mock::MockAurApi;
+#[cfg(feature = "aur")]
+pub use traits::AurApi;
 
 /// What: Wrapper for AUR operations using an `ArchClient`.
 ///
@@ -138,6 +147,69 @@ impl<'a> Aur<'a> {
     /// - Returns `Err(ArchToolkitError::InvalidInput)` if the URL is not from archlinux.org
     /// - Returns `Err(ArchToolkitError::Parse)` if rate limiter mutex is poisoned
     pub async fn pkgbuild(&self, package: &str) -> Result<String> {
+        pkgbuild::pkgbuild(self.client, package).await
+    }
+}
+
+#[cfg(feature = "aur")]
+use async_trait::async_trait;
+
+#[cfg(feature = "aur")]
+#[async_trait]
+impl AurApi for Aur<'_> {
+    /// What: Search for packages in the AUR by name.
+    ///
+    /// Inputs:
+    /// - `query`: Search query string
+    ///
+    /// Output:
+    /// - `Result<Vec<AurPackage>>` containing search results, or an error
+    ///
+    /// Details:
+    /// - Delegates to the underlying search module function
+    async fn search(&self, query: &str) -> Result<Vec<AurPackage>> {
+        search::search(self.client, query).await
+    }
+
+    /// What: Fetch detailed information for one or more AUR packages.
+    ///
+    /// Inputs:
+    /// - `names`: Slice of package names to fetch info for
+    ///
+    /// Output:
+    /// - `Result<Vec<AurPackageDetails>>` containing package details, or an error
+    ///
+    /// Details:
+    /// - Delegates to the underlying info module function
+    async fn info(&self, names: &[&str]) -> Result<Vec<AurPackageDetails>> {
+        info::info(self.client, names).await
+    }
+
+    /// What: Fetch AUR package comments.
+    ///
+    /// Inputs:
+    /// - `pkgname`: Package name to fetch comments for
+    ///
+    /// Output:
+    /// - `Result<Vec<AurComment>>` with parsed comments, or an error
+    ///
+    /// Details:
+    /// - Delegates to the underlying comments module function
+    async fn comments(&self, pkgname: &str) -> Result<Vec<AurComment>> {
+        comments::comments(self.client, pkgname).await
+    }
+
+    /// What: Fetch PKGBUILD content for an AUR package.
+    ///
+    /// Inputs:
+    /// - `package`: Package name to fetch PKGBUILD for
+    ///
+    /// Output:
+    /// - `Result<String>` with PKGBUILD text, or an error
+    ///
+    /// Details:
+    /// - Delegates to the underlying pkgbuild module function
+    async fn pkgbuild(&self, package: &str) -> Result<String> {
         pkgbuild::pkgbuild(self.client, package).await
     }
 }

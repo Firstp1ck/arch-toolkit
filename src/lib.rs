@@ -104,6 +104,9 @@ pub use error::{ArchToolkitError as Error, Result};
 pub use types::{AurComment, AurPackage, AurPackageDetails};
 
 #[cfg(feature = "aur")]
+pub use aur::{AurApi, MockAurApi};
+
+#[cfg(feature = "aur")]
 pub use client::{ArchClient, ArchClientBuilder, CacheInvalidator};
 
 #[cfg(feature = "aur")]

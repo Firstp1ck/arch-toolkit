@@ -102,3 +102,59 @@ Would you like me to create a detailed plan for implementing some or all of thes
 2. **Testability Traits** (critical for library adoption)
 3. **Rich Error Context** (debugging ease)
 4. **Examples Directory** (documentation by example)
+
+---
+
+## Implementation Status
+
+### ✅ Implemented
+
+1. **Client Builder Pattern with Configuration** - ✅ DONE
+   - `ArchClient::builder()` with `timeout()`, `user_agent()`, `retry_policy()`, `cache_config()` methods
+   - `ArchClient::new()` for default configuration
+   - Method chaining API: `client.aur().search()`, `client.aur().info()`, etc.
+
+2. **Retry Policies with Configurable Strategy** - ✅ DONE
+   - `RetryPolicy` struct with configurable max retries (default: 3)
+   - Exponential backoff with jitter implemented
+   - Retry only on specific error codes (5xx, timeouts) via `is_retryable_error()`
+   - Per-operation retry configuration
+
+3. **Optional Caching Layer** - ✅ DONE
+   - In-memory LRU cache with TTL (`MemoryCache`)
+   - Optional disk cache for PKGBUILDs (via `cache-disk` feature)
+   - Cache invalidation API (`CacheInvalidator` with per-operation invalidation methods)
+   - `CacheConfig` with per-operation enable/disable and TTL configuration
+
+4. **Examples Directory** - ✅ DONE
+   - `examples/aur_example.rs` - Comprehensive AUR operations example
+   - `examples/with_caching.rs` - Caching layer usage example
+   - Examples demonstrate builder pattern, retry policies, and caching
+
+### ❌ Not Yet Implemented
+
+4. **Testability: Trait-based Design** - ❌ TODO
+   - No `AurApi` trait exists
+   - Current implementation uses concrete types, making mocking difficult
+
+5. **Rich Error Context** - ⚠️ PARTIAL
+   - Basic error types exist (`ArchToolkitError::Network`, `InvalidInput`, etc.)
+   - Missing operation-specific error variants with context (e.g., `SearchFailed { query, source }`)
+   - Errors don't preserve query/package name context in error messages
+
+6. **Input Validation Layer** - ❌ TODO
+   - No package name format validation
+   - No query length limits
+   - Empty input handling exists but could be more explicit
+
+7. **Health Check / Connectivity Test** - ❌ TODO
+   - No `health_check()` method on `ArchClient`
+   - No connectivity test functionality
+
+8. **Prelude Module** - ❌ TODO
+   - No `prelude` module in `src/lib.rs`
+   - Common types are re-exported at crate root but not via `prelude::*`
+
+10. **Environment Variable Configuration** - ❌ TODO
+   - No support for `ARCH_TOOLKIT_TIMEOUT`, `ARCH_TOOLKIT_USER_AGENT`, etc.
+   - Builder doesn't read from environment variables
