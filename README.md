@@ -29,7 +29,7 @@ Add `arch-toolkit` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-arch-toolkit = "0.1.0"
+arch-toolkit = "0.1.1"
 ```
 
 ### Feature Flags
@@ -40,13 +40,13 @@ arch-toolkit = "0.1.0"
 To disable default features:
 
 ```toml
-arch-toolkit = { version = "0.1.0", default-features = false, features = ["aur"] }
+arch-toolkit = { version = "0.1.1", default-features = false, features = ["aur"] }
 ```
 
 To enable disk caching:
 
 ```toml
-arch-toolkit = { version = "0.1.0", features = ["cache-disk"] }
+arch-toolkit = { version = "0.1.1", features = ["cache-disk"] }
 ```
 
 ## Quick Start
@@ -54,10 +54,10 @@ arch-toolkit = { version = "0.1.0", features = ["cache-disk"] }
 ### Basic Usage
 
 ```rust
-use arch_toolkit::ArchClient;
+use arch_toolkit::prelude::*;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     // Create a client with default settings
     let client = ArchClient::new()?;
     
@@ -85,6 +85,20 @@ let client = ArchClient::builder()
     .timeout(Duration::from_secs(60))
     .user_agent("my-app/1.0")
     .max_retries(5)
+    .build()?;
+```
+
+Or configure via environment variables (perfect for CI/CD):
+
+```bash
+export ARCH_TOOLKIT_TIMEOUT=60
+export ARCH_TOOLKIT_USER_AGENT="my-app/1.0"
+export ARCH_TOOLKIT_MAX_RETRIES=5
+```
+
+```rust
+let client = ArchClient::builder()
+    .from_env()  // Load configuration from environment
     .build()?;
 ```
 
@@ -161,18 +175,35 @@ let pkgbuild = client.aur().pkgbuild("yay").await?;
 println!("PKGBUILD:\n{}", pkgbuild);
 ```
 
+### Health Checks
+
+Monitor AUR service status:
+
+```rust
+// Quick health check
+let is_healthy = client.health_check().await?;
+
+// Detailed status with latency
+let status = client.health_status().await?;
+println!("Status: {:?}, Latency: {:?}", status.status, status.latency);
+```
+
 ## Examples
 
 See the `examples/` directory for comprehensive examples:
 
 - `examples/aur_example.rs`: Complete AUR operations demonstration
 - `examples/with_caching.rs`: Caching layer usage
+- `examples/env_config.rs`: Environment variable configuration
+- `examples/health_check.rs`: Health check functionality
 
 Run examples with:
 
 ```bash
 cargo run --example aur_example
 cargo run --example with_caching
+cargo run --example env_config
+cargo run --example health_check
 ```
 
 ## API Documentation
@@ -200,6 +231,10 @@ All operations return `Result<T, ArchToolkitError>`. Common error types:
 - `ArchToolkitError::Parse`: JSON/HTML parsing errors
 - `ArchToolkitError::InvalidInput`: Invalid parameters or URLs
 - `ArchToolkitError::Timeout`: Request timeout
+- `ArchToolkitError::EmptyInput`: Empty input provided (with input validation)
+- `ArchToolkitError::InvalidPackageName`: Invalid package name format
+
+Input validation is enabled by default and validates package names and search queries against Arch Linux standards.
 
 ## Requirements
 

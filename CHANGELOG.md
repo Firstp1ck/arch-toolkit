@@ -1,3 +1,185 @@
+## [0.1.1] - 2025-12-22
+
+# Release v0.1.1 - Developer Experience & Robustness
+
+**Release Date**: 2025-12-21
+
+## 🚀 What's New
+
+This release focuses on improving developer experience, adding configuration flexibility, and enhancing robustness with input validation and health checks.
+
+### ✨ New Features
+
+**Environment Variable Configuration**
+- Configure the client entirely via environment variables
+- Support for `ARCH_TOOLKIT_*` variables:
+  - `ARCH_TOOLKIT_TIMEOUT` - Request timeout
+  - `ARCH_TOOLKIT_USER_AGENT` - Custom user agent
+  - `ARCH_TOOLKIT_MAX_RETRIES` - Maximum retry attempts
+  - `ARCH_TOOLKIT_RETRY_ENABLED` - Enable/disable retries
+  - `ARCH_TOOLKIT_VALIDATION_STRICT` - Strict validation mode
+  - `ARCH_TOOLKIT_CACHE_SIZE` - Cache size configuration
+- Perfect for CI/CD and Docker environments
+- Use `ArchClientBuilder::from_env()` for pure environment-based configuration
+- Use `ArchClientBuilder::with_env()` to merge env vars into existing builder
+
+**Health Check Functionality**
+- Check AUR service status and latency
+- `client.health_check()` - Quick health check
+- `client.health_status()` - Detailed health status with latency
+- Automatic status classification:
+  - `Healthy` - Service responding quickly (< 2s)
+  - `Degraded` - Service responding slowly (≥ 2s)
+  - `Unreachable` - Service not responding
+  - `Timeout` - Request timed out
+- Configurable health check timeout
+
+**Input Validation**
+- Automatic validation of package names and search queries
+- Validates against Arch Linux packaging standards
+- Configurable validation behavior:
+  - Strict mode: Returns errors for empty/invalid inputs
+  - Lenient mode: Returns empty results for invalid inputs
+- New error types:
+  - `EmptyInput` - Empty input provided
+  - `InvalidPackageName` - Invalid package name format
+  - `InvalidSearchQuery` - Invalid search query
+  - `InputTooLong` - Input exceeds maximum length
+
+**Prelude Module**
+- Convenient single-import module: `use arch_toolkit::prelude::*;`
+- Re-exports all commonly used types and functions
+- Cleaner imports for common use cases
+
+**Rich Error Context**
+- Enhanced error messages with more context
+- Better error classification and reporting
+- Improved debugging experience
+
+**Trait-Based Design**
+- `AurApi` trait for better testability
+- Easier to mock and test AUR operations
+- More flexible architecture
+
+### 🔧 Improvements
+
+- Better error messages with more context
+- Improved testability with trait-based design
+- Enhanced robustness with input validation
+- MIT License added to project
+- Various dev usability improvements
+
+## Quick Start
+
+### Using Environment Variables
+
+```bash
+export ARCH_TOOLKIT_TIMEOUT=60
+export ARCH_TOOLKIT_USER_AGENT="my-app/1.0"
+export ARCH_TOOLKIT_MAX_RETRIES=3
+```
+
+```rust
+use arch_toolkit::ArchClient;
+
+// Create client from environment variables
+let client = ArchClient::builder()
+    .from_env()
+    .build()?;
+```
+
+### Health Checks
+
+```rust
+use arch_toolkit::ArchClient;
+
+let client = ArchClient::new()?;
+
+// Quick health check
+let is_healthy = client.health_check().await?;
+println!("AUR is healthy: {}", is_healthy);
+
+// Detailed health status
+let status = client.health_status().await?;
+println!("Status: {:?}, Latency: {:?}", status.status, status.latency);
+```
+
+### Input Validation
+
+```rust
+use arch_toolkit::ArchClient;
+use arch_toolkit::validation::ValidationConfig;
+
+// Strict validation (default)
+let client = ArchClient::new()?;
+// Empty search will return an error
+let result = client.aur().search("").await; // Returns Err(EmptyInput)
+
+// Lenient validation
+let config = ValidationConfig {
+    strict_empty: false,
+    ..Default::default()
+};
+let client = ArchClient::builder()
+    .validation_config(config)
+    .build()?;
+// Empty search will return empty results
+let result = client.aur().search("").await?; // Returns Ok(vec![])
+```
+
+### Using Prelude
+
+```rust
+use arch_toolkit::prelude::*;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let client = ArchClient::new()?;
+    let packages = client.aur().search("yay").await?;
+    Ok(())
+}
+```
+
+## Migration from v0.1.0
+
+No breaking changes! This is a backward-compatible release. All existing code will continue to work.
+
+**Optional upgrades:**
+- Consider using `prelude::*` for cleaner imports
+- Add health checks to monitor AUR service status
+- Use environment variables for configuration in CI/CD environments
+- Enable input validation for better error handling
+
+## Installation
+
+```bash
+cargo add arch-toolkit@0.1.1 --features aur
+```
+
+Or update your `Cargo.toml`:
+
+```toml
+[dependencies]
+arch-toolkit = { version = "0.1.1", features = ["aur"] }
+```
+
+## Documentation
+
+- [Full API Documentation](https://docs.rs/arch-toolkit/0.1.1)
+- [GitHub Repository](https://github.com/Firstp1ck/arch-toolkit)
+- [Examples](https://github.com/Firstp1ck/arch-toolkit/tree/main/examples)
+
+## Feedback
+
+Found a bug or have a feature request? Open an issue on [GitHub](https://github.com/Firstp1ck/arch-toolkit/issues)!
+
+---
+
+**Full Changelog**: See [CHANGELOG.md](../CHANGELOG.md) for detailed technical changes.
+
+
+---
+
 # Changelog
 
 All notable changes to arch-toolkit will be documented in this file.
