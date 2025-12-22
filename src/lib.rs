@@ -102,6 +102,9 @@ pub mod cache;
 #[cfg(feature = "aur")]
 pub mod health;
 
+#[cfg(feature = "aur")]
+mod env;
+
 /// Prelude module for convenient imports.
 ///
 /// This module re-exports commonly used types, traits, and functions,
