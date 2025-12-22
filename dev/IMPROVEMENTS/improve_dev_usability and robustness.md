@@ -85,10 +85,9 @@ use arch_toolkit::prelude::*;
 ## 9. **Examples Directory**
 
 Runnable examples demonstrating common patterns:
-- `examples/search.rs` - Basic search
-- `examples/batch_info.rs` - Fetching multiple packages
+- `examples/aur_example.rs` - Comprehensive AUR operations
 - `examples/with_caching.rs` - Using the cache layer
-- `examples/custom_client.rs` - Custom configuration
+- `examples/mock_testing.rs` - Mock API usage and testing patterns
 
 ## 10. **Environment Variable Configuration**
 
@@ -98,10 +97,11 @@ Support `ARCH_TOOLKIT_TIMEOUT`, `ARCH_TOOLKIT_USER_AGENT`, etc. for CI/CD and co
 
 Would you like me to create a detailed plan for implementing some or all of these improvements? If so, which ones are most important to you? I'd suggest prioritizing:
 
-1. **Client Builder Pattern** (most impactful for DX)
-2. **Testability Traits** (critical for library adoption)
-3. **Rich Error Context** (debugging ease)
-4. **Examples Directory** (documentation by example)
+1. **Client Builder Pattern** (most impactful for DX) - ✅ DONE
+2. **Testability Traits** (critical for library adoption) - ✅ DONE
+3. **Rich Error Context** (debugging ease) - ✅ DONE
+4. **Examples Directory** (documentation by example) - ✅ DONE
+5. **Input Validation Layer** (prevent invalid API calls) - ✅ DONE
 
 ---
 
@@ -126,35 +126,99 @@ Would you like me to create a detailed plan for implementing some or all of thes
    - Cache invalidation API (`CacheInvalidator` with per-operation invalidation methods)
    - `CacheConfig` with per-operation enable/disable and TTL configuration
 
-4. **Examples Directory** - ✅ DONE
+4. **Testability: Trait-based Design** - ✅ DONE
+   - `AurApi` trait defined with async methods for all AUR operations
+   - `Aur<'a>` implements `AurApi` trait, maintaining backward compatibility
+   - `MockAurApi` with builder pattern for unit testing without network requests
+   - Thread-safe mock implementation with per-query/package result configuration
+   - Exported from crate root for easy access
+
+5. **Examples Directory** - ✅ DONE
    - `examples/aur_example.rs` - Comprehensive AUR operations example
    - `examples/with_caching.rs` - Caching layer usage example
-   - Examples demonstrate builder pattern, retry policies, and caching
+   - `examples/mock_testing.rs` - Mock API usage and testing patterns
+   - `examples/rich_error_context.rs` - Rich error context demonstration and usage patterns
+   - Examples demonstrate builder pattern, retry policies, caching, mocking, and error handling
+
+6. **Rich Error Context** - ✅ DONE
+   - Operation-specific error variants with context preservation:
+     - `SearchFailed { query, source }` - preserves search query in error messages
+     - `InfoFailed { packages, source }` - preserves package names in error messages
+     - `CommentsFailed { package, source }` - preserves package name in error messages
+     - `PkgbuildFailed { package, source }` - preserves package name in error messages
+     - `PackageNotFound { package }` - enhanced with package name (replaces generic `NotFound`)
+   - Helper constructor methods for creating contextual errors (`search_failed()`, `info_failed()`, etc.)
+   - All AUR operations updated to use contextual error variants
+   - Retry logic enhanced to preserve operation context in error messages
+   - Mock implementation updated to handle new error variants
+   - Comprehensive example demonstrating error context extraction and handling patterns
+   - Unit tests added for error context preservation in all AUR operations
+
+7. **Input Validation Layer** - ✅ DONE
+   - `ValidationConfig` struct with configurable validation behavior (strict/lenient mode, max lengths)
+   - Package name validation according to Arch Linux packaging standards:
+     - Validates allowed characters (lowercase letters, digits, `@`, `.`, `_`, `+`, `-`)
+     - Prevents names starting with `-` or `.`
+     - Enforces maximum length (default: 127 characters)
+   - Search query validation:
+     - Trims whitespace and validates non-empty (in strict mode)
+     - Enforces maximum length (default: 256 characters)
+   - Structured validation error variants:
+     - `EmptyInput { field, message }` - for empty inputs
+     - `InvalidPackageName { name, reason }` - for invalid package name format
+     - `InvalidSearchQuery { reason }` - for invalid search queries
+     - `InputTooLong { field, max_length, actual_length }` - for inputs exceeding limits
+   - Validation integrated into all AUR operations (`search`, `info`, `comments`, `pkgbuild`)
+   - Configurable via `ArchClientBuilder::validation_config()` method
+   - Supports strict mode (default, returns errors) and lenient mode (returns empty results)
+   - Comprehensive unit tests for all validation functions
+   - Example demonstrating validation error handling patterns
+
+8. **Health Check / Connectivity Test** - ✅ DONE
+   - `health_check()` method on `ArchClient` returns `Result<bool>`
+   - `health_status()` method returns detailed `HealthStatus` with latency and service status
+   - `ServiceStatus` enum: `Healthy`, `Degraded`, `Unreachable`, `Timeout`
+   - Configurable health check timeout via `ArchClientBuilder::health_check_timeout()`
+   - Uses minimal AUR RPC endpoint for lightweight connectivity checks
+   - Latency-based status classification (degraded if > 2 seconds)
+   - Comprehensive unit tests and integration tests
+   - Example demonstrating usage patterns
+
+9. **Prelude Module** - ✅ DONE
+   - `prelude` module created in `src/prelude.rs` with comprehensive re-exports
+   - Re-exports commonly used types: `ArchClient`, `ArchClientBuilder`, `AurPackage`, `AurPackageDetails`, `AurComment`
+   - Re-exports error types: `Error`, `Result`
+   - Re-exports traits: `AurApi`
+   - Re-exports testing utilities: `MockAurApi`
+   - Re-exports configuration types: `CacheConfig`, `CacheConfigBuilder`, `ValidationConfig`, `RetryPolicy`, `CacheInvalidator`
+   - Re-exports health types: `HealthStatus`, `ServiceStatus`
+   - Module registered in `src/lib.rs` with documentation and usage examples
+   - `RetryPolicy` exported at crate root for easier access
+   - Comprehensive documentation with multiple usage examples
+   - Enables single-line import: `use arch_toolkit::prelude::*;`
+
+10. **Environment Variable Configuration** - ✅ DONE
+   - `env` module created in `src/env.rs` with environment variable parsing utilities
+   - Support for all major configuration options via `ARCH_TOOLKIT_*` environment variables:
+     - `ARCH_TOOLKIT_TIMEOUT` - HTTP request timeout in seconds
+     - `ARCH_TOOLKIT_USER_AGENT` - Custom user agent string
+     - `ARCH_TOOLKIT_HEALTH_CHECK_TIMEOUT` - Health check timeout in seconds
+     - `ARCH_TOOLKIT_MAX_RETRIES` - Maximum retry attempts
+     - `ARCH_TOOLKIT_RETRY_ENABLED` - Enable/disable retries (boolean)
+     - `ARCH_TOOLKIT_RETRY_INITIAL_DELAY_MS` - Initial retry delay in milliseconds
+     - `ARCH_TOOLKIT_RETRY_MAX_DELAY_MS` - Maximum retry delay in milliseconds
+     - `ARCH_TOOLKIT_VALIDATION_STRICT` - Strict validation mode (boolean)
+     - `ARCH_TOOLKIT_CACHE_SIZE` - Memory cache size
+   - `ArchClientBuilder::from_env()` method creates builder with values from environment variables
+   - `ArchClientBuilder::with_env()` method merges environment variables into existing builder (env overrides code)
+   - Boolean environment variables support multiple formats: "true"/"false", "1"/"0", "yes"/"no", "on"/"off" (case-insensitive)
+   - Invalid environment variables are silently ignored (falls back to defaults or existing values)
+   - Comprehensive unit tests for all environment variable parsing functions
+   - Integration tests for `from_env()` and `with_env()` methods
+   - Example file `examples/env_config.rs` demonstrating usage patterns for CI/CD, Docker, and runtime configuration
+   - Module registered in `src/lib.rs` as private module (pub(crate) functions)
+   - Useful for CI/CD pipelines, Docker containers, and runtime configuration without code changes
 
 ### ❌ Not Yet Implemented
 
-4. **Testability: Trait-based Design** - ❌ TODO
-   - No `AurApi` trait exists
-   - Current implementation uses concrete types, making mocking difficult
-
-5. **Rich Error Context** - ⚠️ PARTIAL
-   - Basic error types exist (`ArchToolkitError::Network`, `InvalidInput`, etc.)
-   - Missing operation-specific error variants with context (e.g., `SearchFailed { query, source }`)
-   - Errors don't preserve query/package name context in error messages
-
-6. **Input Validation Layer** - ❌ TODO
-   - No package name format validation
-   - No query length limits
-   - Empty input handling exists but could be more explicit
-
-7. **Health Check / Connectivity Test** - ❌ TODO
-   - No `health_check()` method on `ArchClient`
-   - No connectivity test functionality
-
-8. **Prelude Module** - ❌ TODO
-   - No `prelude` module in `src/lib.rs`
-   - Common types are re-exported at crate root but not via `prelude::*`
-
-10. **Environment Variable Configuration** - ❌ TODO
-   - No support for `ARCH_TOOLKIT_TIMEOUT`, `ARCH_TOOLKIT_USER_AGENT`, etc.
-   - Builder doesn't read from environment variables
+(All planned improvements have been implemented)
