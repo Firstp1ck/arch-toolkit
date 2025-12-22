@@ -130,6 +130,12 @@ pub use types::{AurComment, AurPackage, AurPackageDetails};
 #[cfg(feature = "aur")]
 pub use types::{HealthStatus, ServiceStatus};
 
+#[cfg(feature = "deps")]
+pub use types::{
+    Dependency, DependencySource, DependencySpec, DependencyStatus, PackageRef, PackageSource,
+    ReverseDependencySummary, SrcinfoData,
+};
+
 #[cfg(feature = "aur")]
 pub use aur::{AurApi, MockAurApi};
 

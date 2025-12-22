@@ -299,17 +299,7 @@ function phase4_build_release
     end
     log_success "Library built successfully"
     
-    # Step 3.3: Dry-run crates.io publish
-    log_step "Verifying crates.io publish (dry-run)"
-    
-    dry_run_cmd "cargo publish --dry-run"
-    if test $status -ne 0
-        log_error "cargo publish --dry-run failed"
-        return 1
-    end
-    log_success "crates.io publish verification passed"
-    
-    # Step 4.1: Commit and push all changes
+    # Step 3.3: Commit and push all changes (before publish verification)
     log_step "Committing and pushing changes"
     
     if test "$DRY_RUN" = true
@@ -334,7 +324,19 @@ function phase4_build_release
         end
     end
     
-    # Step 4.4: Create git tag
+    # Step 3.4: Dry-run crates.io publish (after commit)
+    log_step "Verifying crates.io publish (dry-run)"
+    
+    dry_run_cmd "cargo publish --dry-run"
+    if test $status -ne 0
+        log_error "cargo publish --dry-run failed"
+        return 1
+    end
+    log_success "crates.io publish verification passed"
+    
+    log_phase "4. Release"
+    
+    # Step 4.1: Create git tag
     log_step "Creating git tag"
     
     set -l tag "v$new_ver"
@@ -362,7 +364,7 @@ function phase4_build_release
         end
     end
     
-    # Step 4.5: Push tag to GitHub
+    # Step 4.2: Push tag to GitHub
     log_step "Pushing tag to GitHub"
     
     dry_run_cmd "git push origin $tag"
@@ -373,7 +375,7 @@ function phase4_build_release
         return 1
     end
     
-    # Step 4.6: Create GitHub release (binary uploaded by GitHub Action)
+    # Step 4.3: Create GitHub release (binary uploaded by GitHub Action)
     log_step "Creating GitHub Release"
     
     set -l release_file "$ARCH_TOOLKIT_DIR/docs/RELEASE_v$new_ver.md"

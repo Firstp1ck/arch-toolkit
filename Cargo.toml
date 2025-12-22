@@ -11,6 +11,7 @@ categories = ["api-bindings", "command-line-utilities"]
 [features]
 default = ["aur"]
 aur = ["dep:reqwest", "dep:tokio", "dep:scraper", "dep:chrono", "dep:rand", "dep:lru", "dep:async-trait"]
+deps = []  # No additional dependencies for types only
 cache-disk = ["dep:dirs"]
 
 [dependencies]
