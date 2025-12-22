@@ -72,12 +72,12 @@ pub async fn search(client: &ArchClient, query: &str) -> Result<Vec<AurPackage>>
 
     // Wrap the request in retry logic if enabled
     let result = if retry_policy.enabled && retry_policy.retry_search {
-        retry_with_policy(retry_policy, "search", || async {
-            perform_search_request(http_client, &url).await
+        retry_with_policy(retry_policy, "search", trimmed_query, || async {
+            perform_search_request(http_client, &url, trimmed_query).await
         })
         .await
     } else {
-        perform_search_request(http_client, &url).await
+        perform_search_request(http_client, &url, trimmed_query).await
     }?;
 
     // Store in cache if enabled
@@ -97,6 +97,7 @@ pub async fn search(client: &ArchClient, query: &str) -> Result<Vec<AurPackage>>
 /// Inputs:
 /// - `client`: HTTP client to use for requests.
 /// - `url`: URL to request.
+/// - `query`: Search query for error context.
 ///
 /// Output:
 /// - `Result<Vec<AurPackage>>` containing search results, or an error.
@@ -104,15 +105,19 @@ pub async fn search(client: &ArchClient, query: &str) -> Result<Vec<AurPackage>>
 /// Details:
 /// - Internal helper function that performs the HTTP request and parsing
 /// - Used by both retry and non-retry code paths
-async fn perform_search_request(client: &Client, url: &str) -> Result<Vec<AurPackage>> {
+async fn perform_search_request(
+    client: &Client,
+    url: &str,
+    query: &str,
+) -> Result<Vec<AurPackage>> {
     let response = match client.get(url).send().await {
         Ok(resp) => {
             reset_archlinux_backoff();
             resp
         }
         Err(e) => {
-            warn!(error = %e, "AUR search request failed");
-            return Err(ArchToolkitError::Network(e));
+            warn!(error = %e, query = %query, "AUR search request failed");
+            return Err(ArchToolkitError::search_failed(query, e));
         }
     };
 
@@ -122,20 +127,20 @@ async fn perform_search_request(client: &Client, url: &str) -> Result<Vec<AurPac
     let response = match response.error_for_status() {
         Ok(resp) => resp,
         Err(e) => {
-            warn!(error = %e, "AUR search returned non-success status");
+            warn!(error = %e, query = %query, "AUR search returned non-success status");
             // If we have retry_after, we could use it, but error_for_status consumes the response
             // For now, the retry logic will handle exponential backoff
-            return Err(ArchToolkitError::Network(e));
+            return Err(ArchToolkitError::search_failed(query, e));
         }
     };
 
     let json: Value = match response.json().await {
         Ok(json) => json,
         Err(e) => {
-            warn!(error = %e, "failed to parse AUR search JSON");
+            warn!(error = %e, query = %query, "failed to parse AUR search JSON");
             // reqwest::Error can contain serde_json::Error, but we'll treat it as network error
             // since the JSON parsing happens inside reqwest
-            return Err(ArchToolkitError::Network(e));
+            return Err(ArchToolkitError::search_failed(query, e));
         }
     };
 
@@ -188,7 +193,35 @@ async fn perform_search_request(client: &Client, url: &str) -> Result<Vec<AurPac
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::ArchToolkitError;
     use serde_json::json;
+
+    #[test]
+    fn test_search_error_includes_query_context() {
+        // Test that SearchFailed error includes the query
+        let query = "test-package";
+        // Create a reqwest::Error by using an invalid CA certificate
+        // This is safe in tests as we're intentionally creating an error
+        #[allow(clippy::unwrap_used)]
+        let cert_result = reqwest::Certificate::from_pem(b"invalid cert");
+        let mock_error = match cert_result {
+            Ok(cert) => reqwest::Client::builder()
+                .add_root_certificate(cert)
+                .build()
+                .expect_err("Should fail to build client with invalid cert"),
+            Err(e) => e,
+        };
+        let error = ArchToolkitError::search_failed(query, mock_error);
+        let error_msg = format!("{error}");
+        assert!(
+            error_msg.contains(query),
+            "Error message should include query: {error_msg}"
+        );
+        assert!(
+            error_msg.contains("AUR search failed"),
+            "Error message should indicate search operation: {error_msg}"
+        );
+    }
 
     #[test]
     fn test_search_parses_valid_response() {

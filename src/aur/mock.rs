@@ -65,19 +65,29 @@ impl MockAurApi {
                 ArchToolkitError::Network(_) => {
                     ArchToolkitError::Parse("Mock network error".to_string())
                 }
-                ArchToolkitError::Json(_) => {
-                    ArchToolkitError::Parse("Mock JSON error".to_string())
+                ArchToolkitError::SearchFailed { query, .. } => {
+                    ArchToolkitError::Parse(format!("Mock search error for query: {query}"))
                 }
+                ArchToolkitError::InfoFailed { packages, .. } => {
+                    ArchToolkitError::Parse(format!("Mock info error for packages: {packages}"))
+                }
+                ArchToolkitError::CommentsFailed { package, .. } => {
+                    ArchToolkitError::Parse(format!("Mock comments error for package: {package}"))
+                }
+                ArchToolkitError::PkgbuildFailed { package, .. } => {
+                    ArchToolkitError::Parse(format!("Mock pkgbuild error for package: {package}"))
+                }
+                ArchToolkitError::Json(_) => ArchToolkitError::Parse("Mock JSON error".to_string()),
                 ArchToolkitError::Parse(s) => ArchToolkitError::Parse(s.clone()),
-                ArchToolkitError::RateLimited { retry_after } => {
-                    ArchToolkitError::RateLimited {
-                        retry_after: *retry_after,
+                ArchToolkitError::RateLimited { retry_after } => ArchToolkitError::RateLimited {
+                    retry_after: *retry_after,
+                },
+                ArchToolkitError::PackageNotFound { package } => {
+                    ArchToolkitError::PackageNotFound {
+                        package: package.clone(),
                     }
                 }
-                ArchToolkitError::NotFound => ArchToolkitError::NotFound,
-                ArchToolkitError::InvalidInput(s) => {
-                    ArchToolkitError::InvalidInput(s.clone())
-                }
+                ArchToolkitError::InvalidInput(s) => ArchToolkitError::InvalidInput(s.clone()),
             }),
         }
     }
@@ -168,11 +178,7 @@ impl MockAurApi {
     /// # Panics
     /// - Panics if the internal mutex is poisoned (should never happen in practice)
     #[must_use]
-    pub fn with_info_result(
-        self,
-        names: &[&str],
-        result: Result<Vec<AurPackageDetails>>,
-    ) -> Self {
+    pub fn with_info_result(self, names: &[&str], result: Result<Vec<AurPackageDetails>>) -> Self {
         let mut sorted_names = names.to_vec();
         sorted_names.sort_unstable();
         let key = sorted_names.join(",");

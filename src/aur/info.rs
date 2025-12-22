@@ -76,12 +76,12 @@ pub async fn info(client: &ArchClient, names: &[&str]) -> Result<Vec<AurPackageD
 
     // Wrap the request in retry logic if enabled
     let result = if retry_policy.enabled && retry_policy.retry_info {
-        retry_with_policy(retry_policy, "info", || async {
-            perform_info_request(http_client, &url).await
+        retry_with_policy(retry_policy, "info", &names.join(", "), || async {
+            perform_info_request(http_client, &url, names).await
         })
         .await
     } else {
-        perform_info_request(http_client, &url).await
+        perform_info_request(http_client, &url, names).await
     }?;
 
     // Store in cache if enabled
@@ -108,15 +108,19 @@ pub async fn info(client: &ArchClient, names: &[&str]) -> Result<Vec<AurPackageD
 /// Details:
 /// - Internal helper function that performs the HTTP request and parsing
 /// - Used by both retry and non-retry code paths
-async fn perform_info_request(client: &Client, url: &str) -> Result<Vec<AurPackageDetails>> {
+async fn perform_info_request(
+    client: &Client,
+    url: &str,
+    package_names: &[&str],
+) -> Result<Vec<AurPackageDetails>> {
     let response = match client.get(url).send().await {
         Ok(resp) => {
             reset_archlinux_backoff();
             resp
         }
         Err(e) => {
-            warn!(error = %e, "AUR info request failed");
-            return Err(ArchToolkitError::Network(e));
+            warn!(error = %e, packages = ?package_names, "AUR info request failed");
+            return Err(ArchToolkitError::info_failed(package_names, e));
         }
     };
 
@@ -126,18 +130,18 @@ async fn perform_info_request(client: &Client, url: &str) -> Result<Vec<AurPacka
     let response = match response.error_for_status() {
         Ok(resp) => resp,
         Err(e) => {
-            warn!(error = %e, "AUR info returned non-success status");
-            return Err(ArchToolkitError::Network(e));
+            warn!(error = %e, packages = ?package_names, "AUR info returned non-success status");
+            return Err(ArchToolkitError::info_failed(package_names, e));
         }
     };
 
     let json: Value = match response.json().await {
         Ok(json) => json,
         Err(e) => {
-            warn!(error = %e, "failed to parse AUR info JSON");
+            warn!(error = %e, packages = ?package_names, "failed to parse AUR info JSON");
             // reqwest::Error can contain serde_json::Error, but we'll treat it as network error
             // since the JSON parsing happens inside reqwest
-            return Err(ArchToolkitError::Network(e));
+            return Err(ArchToolkitError::info_failed(package_names, e));
         }
     };
 
@@ -227,7 +231,39 @@ async fn perform_info_request(client: &Client, url: &str) -> Result<Vec<AurPacka
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::ArchToolkitError;
     use serde_json::json;
+
+    #[test]
+    fn test_info_error_includes_package_context() {
+        // Test that InfoFailed error includes the package names
+        let packages = &["yay", "paru"];
+        // Create a reqwest::Error by using an invalid CA certificate
+        // This is safe in tests as we're intentionally creating an error
+        #[allow(clippy::unwrap_used)]
+        let cert_result = reqwest::Certificate::from_pem(b"invalid cert");
+        let mock_error = match cert_result {
+            Ok(cert) => reqwest::Client::builder()
+                .add_root_certificate(cert)
+                .build()
+                .expect_err("Should fail to build client with invalid cert"),
+            Err(e) => e,
+        };
+        let error = ArchToolkitError::info_failed(packages, mock_error);
+        let error_msg = format!("{error}");
+        assert!(
+            error_msg.contains("yay"),
+            "Error message should include package names: {error_msg}"
+        );
+        assert!(
+            error_msg.contains("paru"),
+            "Error message should include all package names: {error_msg}"
+        );
+        assert!(
+            error_msg.contains("AUR info fetch failed"),
+            "Error message should indicate info operation: {error_msg}"
+        );
+    }
 
     #[test]
     fn test_info_parses_valid_response() {

@@ -82,12 +82,12 @@ pub async fn comments(client: &ArchClient, pkgname: &str) -> Result<Vec<AurComme
 
     // Wrap the request in retry logic if enabled
     let html_text = if retry_policy.enabled && retry_policy.retry_comments {
-        retry_with_policy(retry_policy, "comments", || async {
-            perform_comments_request(http_client, &url).await
+        retry_with_policy(retry_policy, "comments", pkgname, || async {
+            perform_comments_request(http_client, &url, pkgname).await
         })
         .await?
     } else {
-        perform_comments_request(http_client, &url).await?
+        perform_comments_request(http_client, &url, pkgname).await?
     };
 
     // Parse HTML
@@ -117,7 +117,11 @@ pub async fn comments(client: &ArchClient, pkgname: &str) -> Result<Vec<AurComme
 /// Details:
 /// - Internal helper function that performs the HTTP request
 /// - Used by both retry and non-retry code paths
-async fn perform_comments_request(client: &ReqwestClient, url: &str) -> Result<String> {
+async fn perform_comments_request(
+    client: &ReqwestClient,
+    url: &str,
+    pkgname: &str,
+) -> Result<String> {
     // Create request with browser-like headers
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -132,8 +136,8 @@ async fn perform_comments_request(client: &ReqwestClient, url: &str) -> Result<S
             resp
         }
         Err(e) => {
-            debug!(error = %e, "AUR comments request failed");
-            return Err(ArchToolkitError::Network(e));
+            debug!(error = %e, pkgname = %pkgname, "AUR comments request failed");
+            return Err(ArchToolkitError::comments_failed(pkgname, e));
         }
     };
 
@@ -143,16 +147,16 @@ async fn perform_comments_request(client: &ReqwestClient, url: &str) -> Result<S
     let response = match response.error_for_status() {
         Ok(resp) => resp,
         Err(e) => {
-            debug!(error = %e, "AUR comments returned non-success status");
-            return Err(ArchToolkitError::Network(e));
+            debug!(error = %e, pkgname = %pkgname, "AUR comments returned non-success status");
+            return Err(ArchToolkitError::comments_failed(pkgname, e));
         }
     };
 
     let html_text = match response.text().await {
         Ok(text) => text,
         Err(e) => {
-            debug!(error = %e, "failed to read AUR comments response");
-            return Err(ArchToolkitError::Network(e));
+            debug!(error = %e, pkgname = %pkgname, "failed to read AUR comments response");
+            return Err(ArchToolkitError::comments_failed(pkgname, e));
         }
     };
 
@@ -708,4 +712,36 @@ fn format_text_node(element: &ElementRef) -> String {
         .replace("<br>", "\n")
         .replace("<br/>", "\n")
         .replace("<br />", "\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::error::ArchToolkitError;
+
+    #[test]
+    fn test_comments_error_includes_package_context() {
+        // Test that CommentsFailed error includes the package name
+        let package = "yay";
+        // Create a reqwest::Error by using an invalid CA certificate
+        // This is safe in tests as we're intentionally creating an error
+        #[allow(clippy::unwrap_used)]
+        let cert_result = reqwest::Certificate::from_pem(b"invalid cert");
+        let mock_error = match cert_result {
+            Ok(cert) => reqwest::Client::builder()
+                .add_root_certificate(cert)
+                .build()
+                .expect_err("Should fail to build client with invalid cert"),
+            Err(e) => e,
+        };
+        let error = ArchToolkitError::comments_failed(package, mock_error);
+        let error_msg = format!("{error}");
+        assert!(
+            error_msg.contains(package),
+            "Error message should include package name: {error_msg}"
+        );
+        assert!(
+            error_msg.contains("AUR comments fetch failed"),
+            "Error message should indicate comments operation: {error_msg}"
+        );
+    }
 }

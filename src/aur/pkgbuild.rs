@@ -107,12 +107,12 @@ pub async fn pkgbuild(client: &ArchClient, package: &str) -> Result<String> {
 
     // Wrap the request in retry logic if enabled
     let text = if retry_policy.enabled && retry_policy.retry_pkgbuild {
-        retry_with_policy(retry_policy, "pkgbuild", || async {
-            perform_pkgbuild_request(http_client, &url).await
+        retry_with_policy(retry_policy, "pkgbuild", package, || async {
+            perform_pkgbuild_request(http_client, &url, package).await
         })
         .await?
     } else {
-        perform_pkgbuild_request(http_client, &url).await?
+        perform_pkgbuild_request(http_client, &url, package).await?
     };
 
     debug!(package = %package, len = text.len(), "PKGBUILD fetched successfully");
@@ -141,7 +141,7 @@ pub async fn pkgbuild(client: &ArchClient, package: &str) -> Result<String> {
 /// Details:
 /// - Internal helper function that performs the HTTP request
 /// - Used by both retry and non-retry code paths
-async fn perform_pkgbuild_request(client: &Client, url: &str) -> Result<String> {
+async fn perform_pkgbuild_request(client: &Client, url: &str, package: &str) -> Result<String> {
     // Fetch with timeout
     let response = match client
         .get(url)
@@ -154,8 +154,8 @@ async fn perform_pkgbuild_request(client: &Client, url: &str) -> Result<String> 
             resp
         }
         Err(e) => {
-            debug!(error = %e, "PKGBUILD request failed");
-            return Err(ArchToolkitError::Network(e));
+            debug!(error = %e, package = %package, "PKGBUILD request failed");
+            return Err(ArchToolkitError::pkgbuild_failed(package, e));
         }
     };
 
@@ -165,18 +165,50 @@ async fn perform_pkgbuild_request(client: &Client, url: &str) -> Result<String> 
     let response = match response.error_for_status() {
         Ok(resp) => resp,
         Err(e) => {
-            debug!(error = %e, "PKGBUILD returned non-success status");
-            return Err(ArchToolkitError::Network(e));
+            debug!(error = %e, package = %package, "PKGBUILD returned non-success status");
+            return Err(ArchToolkitError::pkgbuild_failed(package, e));
         }
     };
 
     let text = match response.text().await {
         Ok(text) => text,
         Err(e) => {
-            debug!(error = %e, "failed to read PKGBUILD response");
-            return Err(ArchToolkitError::Network(e));
+            debug!(error = %e, package = %package, "failed to read PKGBUILD response");
+            return Err(ArchToolkitError::pkgbuild_failed(package, e));
         }
     };
 
     Ok(text)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::error::ArchToolkitError;
+
+    #[test]
+    fn test_pkgbuild_error_includes_package_context() {
+        // Test that PkgbuildFailed error includes the package name
+        let package = "yay";
+        // Create a reqwest::Error by using an invalid CA certificate
+        // This is safe in tests as we're intentionally creating an error
+        #[allow(clippy::unwrap_used)]
+        let cert_result = reqwest::Certificate::from_pem(b"invalid cert");
+        let mock_error = match cert_result {
+            Ok(cert) => reqwest::Client::builder()
+                .add_root_certificate(cert)
+                .build()
+                .expect_err("Should fail to build client with invalid cert"),
+            Err(e) => e,
+        };
+        let error = ArchToolkitError::pkgbuild_failed(package, mock_error);
+        let error_msg = format!("{error}");
+        assert!(
+            error_msg.contains(package),
+            "Error message should include package name: {error_msg}"
+        );
+        assert!(
+            error_msg.contains("PKGBUILD fetch failed"),
+            "Error message should indicate pkgbuild operation: {error_msg}"
+        );
+    }
 }

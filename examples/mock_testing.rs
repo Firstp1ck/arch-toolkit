@@ -113,7 +113,9 @@ async fn main() -> Result<()> {
 
     let error_mock = MockAurApi::new().with_search_result(
         "error",
-        Err(ArchToolkitError::Parse("Network error for testing".to_string())),
+        Err(ArchToolkitError::Parse(
+            "Network error for testing".to_string(),
+        )),
     );
 
     match count_packages(&error_mock, "error").await {

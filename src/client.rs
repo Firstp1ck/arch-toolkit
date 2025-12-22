@@ -289,6 +289,7 @@ pub fn extract_retry_after(response: &reqwest::Response) -> Option<u64> {
 /// Inputs:
 /// - `policy`: Retry policy configuration
 /// - `operation_name`: Name of the operation for logging
+/// - `context`: Operation context (query/package name) for error messages
 /// - `operation`: Async closure that performs the operation and returns `Result<T>`
 ///
 /// Output:
@@ -300,14 +301,16 @@ pub fn extract_retry_after(response: &reqwest::Response) -> Option<u64> {
 /// - Respects Retry-After header when available from response errors
 /// - Logs retry attempts with tracing
 /// - Returns immediately on success or non-retryable errors
+/// - Preserves operation context in error messages
 ///
 /// # Errors
-/// - Returns `Err(ArchToolkitError::Network)` for network errors that are retryable but exhausted retries
-/// - Returns `Err(ArchToolkitError::Parse)` for non-retryable network errors or other errors
+/// - Returns context-specific errors (`SearchFailed`, `InfoFailed`, etc.) with preserved context
+/// - Returns `Err(ArchToolkitError::Parse)` for non-retryable errors
 #[cfg(feature = "aur")]
 pub async fn retry_with_policy<F, Fut, T>(
     policy: &RetryPolicy,
     operation_name: &str,
+    context: &str,
     mut operation: F,
 ) -> Result<T>
 where
@@ -318,7 +321,7 @@ where
         return operation().await;
     }
 
-    let mut last_error: Option<String> = None;
+    let mut last_error: Option<ArchToolkitError> = None;
     let mut retry_after_seconds: Option<u64> = None;
 
     for attempt in 0..=policy.max_retries {
@@ -329,36 +332,46 @@ where
                 if attempt > 0 {
                     debug!(
                         operation = operation_name,
+                        context = %context,
                         attempt = attempt + 1,
                         "operation succeeded after retries"
                     );
                 }
                 return Ok(value);
             }
-            Err(ArchToolkitError::Network(ref e)) => {
+            Err(
+                ArchToolkitError::Network(ref e)
+                | ArchToolkitError::SearchFailed { source: ref e, .. }
+                | ArchToolkitError::InfoFailed { source: ref e, .. }
+                | ArchToolkitError::CommentsFailed { source: ref e, .. }
+                | ArchToolkitError::PkgbuildFailed { source: ref e, .. },
+            ) => {
                 let (is_retryable, _) = is_retryable_error(e);
 
+                // Extract the error for reuse
+                let Err(error) = result else {
+                    unreachable!();
+                };
+
                 if !is_retryable {
-                    // Non-retryable error, return immediately
-                    // Since reqwest::Error doesn't implement Clone, we need to recreate it
-                    // Convert to string and create new error
-                    let error_msg = format!("Network error: {e}");
-                    return Err(ArchToolkitError::Parse(error_msg));
+                    // Non-retryable error, return immediately with preserved context
+                    return Err(error);
                 }
 
                 // Check if we've exhausted retries
                 if attempt >= policy.max_retries {
                     warn!(
                         operation = operation_name,
+                        context = %context,
                         max_retries = policy.max_retries,
                         "max retries exhausted"
                     );
-                    let error_msg =
-                        format!("Network error after {} retries: {e}", policy.max_retries);
-                    return Err(ArchToolkitError::Parse(error_msg));
+                    // Return the last error with preserved context
+                    return Err(error);
                 }
 
-                last_error = Some(e.to_string());
+                // Store the error for potential retry
+                last_error = Some(error);
 
                 // Calculate delay with exponential backoff
                 let base_delay_ms = retry_after_seconds.map_or_else(
@@ -380,6 +393,7 @@ where
 
                 warn!(
                     operation = operation_name,
+                    context = %context,
                     attempt = attempt + 1,
                     max_retries = policy.max_retries,
                     delay_ms = total_delay_ms,
@@ -399,9 +413,11 @@ where
     }
 
     // This should never be reached, but handle it gracefully
-    Err(ArchToolkitError::Parse(last_error.unwrap_or_else(|| {
-        "retry exhausted without error".to_string()
-    })))
+    Err(last_error.unwrap_or_else(|| {
+        ArchToolkitError::Parse(format!(
+            "retry exhausted without error for {operation_name} (context: {context})"
+        ))
+    }))
 }
 
 // ============================================================================
