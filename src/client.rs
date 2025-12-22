@@ -434,6 +434,10 @@ const DEFAULT_TIMEOUT_SECS: u64 = 30;
 /// Default user agent string.
 const DEFAULT_USER_AGENT: &str = "arch-toolkit/0.1.0";
 
+#[cfg(feature = "aur")]
+/// Default health check timeout (5 seconds).
+const DEFAULT_HEALTH_CHECK_TIMEOUT_SECS: u64 = 5;
+
 // ============================================================================
 // Retry Policy
 // ============================================================================
@@ -522,6 +526,8 @@ pub struct ArchClient {
     cache_config: Option<CacheConfig>,
     /// Validation configuration.
     validation_config: ValidationConfig,
+    /// Health check timeout (default: 5 seconds).
+    health_check_timeout: Duration,
 }
 
 #[cfg(feature = "aur")]
@@ -656,6 +662,45 @@ impl ArchClient {
     #[must_use]
     pub const fn invalidate_cache(&self) -> CacheInvalidator<'_> {
         CacheInvalidator::new(self)
+    }
+
+    /// What: Quick connectivity check for archlinux.org services.
+    ///
+    /// Inputs: None
+    ///
+    /// Output:
+    /// - `Result<bool>` - `true` if services are operational, `false` or error otherwise
+    ///
+    /// Details:
+    /// - Performs lightweight HTTP request to AUR RPC API
+    /// - Uses shorter timeout than regular operations (5s default)
+    /// - Does not count against rate limiting quota
+    /// - Useful for pre-flight connectivity checks
+    ///
+    /// # Errors
+    /// - Returns `Err(ArchToolkitError::Network)` if the HTTP request fails
+    pub async fn health_check(&self) -> Result<bool> {
+        let status = self.health_status().await?;
+        Ok(status.is_healthy())
+    }
+
+    /// What: Detailed health status for archlinux.org services.
+    ///
+    /// Inputs: None
+    ///
+    /// Output:
+    /// - `Result<HealthStatus>` with detailed service status and latency
+    ///
+    /// Details:
+    /// - Performs lightweight HTTP request to AUR RPC API
+    /// - Measures latency and determines service status
+    /// - Uses shorter timeout than regular operations
+    /// - Returns `HealthStatus::Degraded` if latency > 2 seconds
+    ///
+    /// # Errors
+    /// - Returns `Err(ArchToolkitError::Network)` if the HTTP request fails
+    pub async fn health_status(&self) -> Result<crate::types::HealthStatus> {
+        crate::health::check_health(&self.http_client, Some(self.health_check_timeout)).await
     }
 }
 
@@ -831,6 +876,8 @@ pub struct ArchClientBuilder {
     cache_config: Option<CacheConfig>,
     /// Validation configuration (default: `ValidationConfig::default()`).
     validation_config: Option<ValidationConfig>,
+    /// Health check timeout (default: 5 seconds).
+    health_check_timeout: Option<Duration>,
 }
 
 #[cfg(feature = "aur")]
@@ -853,6 +900,7 @@ impl ArchClientBuilder {
             retry_policy: None,
             cache_config: None,
             validation_config: None,
+            health_check_timeout: None,
         }
     }
 
@@ -1014,6 +1062,24 @@ impl ArchClientBuilder {
         self
     }
 
+    /// What: Set the health check timeout.
+    ///
+    /// Inputs:
+    /// - `timeout`: Duration for health check operations
+    ///
+    /// Output:
+    /// - `Self` for method chaining
+    ///
+    /// Details:
+    /// - Overrides default health check timeout of 5 seconds
+    /// - Health checks use shorter timeouts than regular operations
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // Cannot be const: mutates self and uses Duration
+    pub fn health_check_timeout(mut self, timeout: Duration) -> Self {
+        self.health_check_timeout = Some(timeout);
+        self
+    }
+
     /// What: Build the `ArchClient` with the configured settings.
     ///
     /// Inputs: None
@@ -1037,6 +1103,9 @@ impl ArchClientBuilder {
             .unwrap_or_else(|| DEFAULT_USER_AGENT.to_string());
         let retry_policy = self.retry_policy.unwrap_or_default();
         let validation_config = self.validation_config.unwrap_or_default();
+        let health_check_timeout = self
+            .health_check_timeout
+            .unwrap_or_else(|| Duration::from_secs(DEFAULT_HEALTH_CHECK_TIMEOUT_SECS));
 
         let http_client = ReqwestClient::builder()
             .timeout(timeout)
@@ -1060,6 +1129,7 @@ impl ArchClientBuilder {
             cache,
             cache_config: self.cache_config,
             validation_config,
+            health_check_timeout,
         })
     }
 }
@@ -1212,5 +1282,49 @@ mod tests {
         let policy2 = policy1.clone();
         assert_eq!(policy1.max_retries, policy2.max_retries);
         assert_eq!(policy1.enabled, policy2.enabled);
+    }
+
+    #[tokio::test]
+    async fn test_health_check_integration() {
+        // Integration test - requires network
+        let client = ArchClient::new().expect("client creation should succeed");
+        let result = client.health_check().await;
+        // Don't assert success - network may not be available in CI
+        // Just verify it doesn't panic and returns a Result
+        if result.is_ok() {
+            // Network is available and health check succeeded
+        } else {
+            // Network is not available or health check failed
+            // This is acceptable in CI environments
+        }
+    }
+
+    #[tokio::test]
+    async fn test_health_status_integration() {
+        // Integration test - requires network
+        let client = ArchClient::new().expect("client creation should succeed");
+        let result = client.health_status().await;
+        // Don't assert success - network may not be available in CI
+        // Just verify it doesn't panic and returns a Result
+        if let Ok(status) = result {
+            // Verify status has valid structure
+            let _ = status.aur_api;
+            let _ = status.latency;
+            let _ = status.checked_at;
+        } else {
+            // Network is not available or health check failed
+            // This is acceptable in CI environments
+        }
+    }
+
+    #[test]
+    fn test_arch_client_builder_health_check_timeout() {
+        let client = ArchClient::builder()
+            .health_check_timeout(Duration::from_secs(10))
+            .build();
+        assert!(
+            client.is_ok(),
+            "ArchClientBuilder with health_check_timeout should succeed"
+        );
     }
 }

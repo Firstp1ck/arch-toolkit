@@ -20,7 +20,7 @@ use arch_toolkit::ArchClient;
 use arch_toolkit::error::{ArchToolkitError, Result};
 use std::error::Error;
 
-/// Helper function to create a mock reqwest::Error for examples.
+/// Helper function to create a mock `reqwest::Error` for examples.
 fn create_mock_error() -> reqwest::Error {
     let cert_result = reqwest::Certificate::from_pem(b"invalid cert");
     match cert_result {
@@ -35,7 +35,7 @@ fn create_mock_error() -> reqwest::Error {
 #[tokio::main]
 #[allow(
     clippy::too_many_lines, // Example file - comprehensive demonstration
-    clippy::unused_variables, // Example file - variables used for demonstration
+    unused_variables, // Example file - variables used for demonstration
     clippy::doc_markdown, // Example file - documentation style
     clippy::items_after_statements, // Example file - helper functions
     clippy::unnecessary_wraps, // Example file - return values for consistency
@@ -54,7 +54,7 @@ async fn main() -> Result<()> {
     println!("│ Rich errors preserve operation context in error messages      │");
     println!("└──────────────────────────────────────────────────────────────┘\n");
 
-    demonstrate_error_context(&client).await?;
+    demonstrate_error_context(&client);
 
     // ========================================================================
     // Example 2: Extracting Context from Errors
@@ -63,7 +63,7 @@ async fn main() -> Result<()> {
     println!("│ Extract query/package names from error variants              │");
     println!("└──────────────────────────────────────────────────────────────┘\n");
 
-    let _ = demonstrate_context_extraction();
+    demonstrate_context_extraction();
 
     // ========================================================================
     // Example 3: Error Source Chain
@@ -72,7 +72,7 @@ async fn main() -> Result<()> {
     println!("│ Traverse the error source chain for detailed diagnostics     │");
     println!("└──────────────────────────────────────────────────────────────┘\n");
 
-    let _ = demonstrate_error_source_chain();
+    demonstrate_error_source_chain();
 
     // ========================================================================
     // Example 4: Practical Error Handling Patterns
@@ -90,7 +90,7 @@ async fn main() -> Result<()> {
     println!("│ See the difference: with vs without context                  │");
     println!("└──────────────────────────────────────────────────────────────┘\n");
 
-    let _ = demonstrate_error_comparison();
+    demonstrate_error_comparison();
 
     // ========================================================================
     // Example 6: Input Validation Errors
@@ -108,7 +108,7 @@ async fn main() -> Result<()> {
 /// What: Demonstrate how error context is preserved in error messages.
 ///
 /// Inputs:
-/// - `client`: ArchClient instance
+/// - `client`: `ArchClient` instance
 ///
 /// Output:
 /// - `Result<()>` indicating success or failure
@@ -116,7 +116,7 @@ async fn main() -> Result<()> {
 /// Details:
 /// - Shows how different operations preserve their context in errors
 /// - Demonstrates error message formatting with context
-async fn demonstrate_error_context(_client: &ArchClient) -> Result<()> {
+fn demonstrate_error_context(_client: &ArchClient) {
     println!("When an AUR operation fails, the error message includes:");
     println!("  • The operation type (search, info, comments, pkgbuild)");
     println!("  • The specific query or package name that failed");
@@ -157,22 +157,41 @@ async fn demonstrate_error_context(_client: &ArchClient) -> Result<()> {
     println!("   Operation: Package lookup");
     println!("   Context: Package name is preserved");
     println!("   Example: \"Package 'nonexistent-package' not found\"\n");
+}
 
-    Ok(())
+/// What: Helper function to extract context from error variants.
+///
+/// Inputs:
+/// - `error`: Error to extract context from
+///
+/// Output:
+/// - `Option<String>` containing context if available
+///
+/// Details:
+/// - Extracts query/package names from errors
+/// - Returns None for errors without extractable context
+fn extract_context(error: &ArchToolkitError) -> Option<String> {
+    match error {
+        ArchToolkitError::SearchFailed { query, .. } => Some(format!("query: {query}")),
+        ArchToolkitError::InfoFailed { packages, .. } => Some(format!("packages: {packages}")),
+        ArchToolkitError::CommentsFailed { package, .. }
+        | ArchToolkitError::PkgbuildFailed { package, .. }
+        | ArchToolkitError::PackageNotFound { package } => Some(format!("package: {package}")),
+        _ => None,
+    }
 }
 
 /// What: Demonstrate how to extract context from error variants.
 ///
 /// Inputs: None
 ///
-/// Output:
-/// - `Result<()>` indicating success or failure
+/// Output: None
 ///
 /// Details:
 /// - Shows pattern matching on error variants
 /// - Extracts query/package names from errors
 /// - Demonstrates helper methods for context extraction
-fn demonstrate_context_extraction() -> Result<()> {
+fn demonstrate_context_extraction() {
     println!("Extracting Context from Errors:");
     println!("────────────────────────────────\n");
 
@@ -235,18 +254,7 @@ fn demonstrate_context_extraction() -> Result<()> {
 
     // Example 6: Generic context extraction function
     println!("6. Generic Context Extraction Function:");
-    fn extract_context(error: &ArchToolkitError) -> Option<String> {
-        match error {
-            ArchToolkitError::SearchFailed { query, .. } => Some(format!("query: {query}")),
-            ArchToolkitError::InfoFailed { packages, .. } => Some(format!("packages: {packages}")),
-            ArchToolkitError::CommentsFailed { package, .. } => Some(format!("package: {package}")),
-            ArchToolkitError::PkgbuildFailed { package, .. } => Some(format!("package: {package}")),
-            ArchToolkitError::PackageNotFound { package } => Some(format!("package: {package}")),
-            _ => None,
-        }
-    }
-
-    let contexts = vec![
+    let contexts = [
         extract_context(&search_error),
         extract_context(&info_error),
         extract_context(&comments_error),
@@ -260,22 +268,19 @@ fn demonstrate_context_extraction() -> Result<()> {
         }
     }
     println!();
-
-    Ok(())
 }
 
 /// What: Demonstrate error source chain traversal.
 ///
 /// Inputs: None
 ///
-/// Output:
-/// - `Result<()>` indicating success or failure
+/// Output: None
 ///
 /// Details:
 /// - Shows how to traverse the error source chain
-/// - Demonstrates accessing underlying reqwest::Error
+/// - Demonstrates accessing underlying `reqwest::Error`
 /// - Shows error chain formatting
-fn demonstrate_error_source_chain() -> Result<()> {
+fn demonstrate_error_source_chain() {
     println!("Error Source Chain:");
     println!("───────────────────\n");
 
@@ -290,7 +295,7 @@ fn demonstrate_error_source_chain() -> Result<()> {
     let mut depth = 0;
     while let Some(err) = current {
         let indent = "   ".repeat(depth);
-        println!("{indent}└─ {}", err);
+        println!("{indent}└─ {err}");
         current = err.source();
         depth += 1;
         if depth > 5 {
@@ -311,14 +316,185 @@ fn demonstrate_error_source_chain() -> Result<()> {
         }
         _ => unreachable!(),
     }
+}
 
-    Ok(())
+/// What: Helper function for user-friendly error messages.
+///
+/// Inputs:
+/// - `client`: `ArchClient` instance
+/// - `query`: Search query string
+///
+/// Output:
+/// - `Result<Vec<AurPackage>>` containing search results
+///
+/// Details:
+/// - Provides user-friendly error messages for search failures
+async fn search_with_friendly_error(
+    client: &ArchClient,
+    query: &str,
+) -> Result<Vec<arch_toolkit::AurPackage>> {
+    client.aur().search(query).await.map_err(|e| {
+        match &e {
+            ArchToolkitError::SearchFailed { query, .. } => {
+                eprintln!("❌ Search failed for query: '{query}'");
+                eprintln!("   Please check your internet connection and try again.");
+            }
+            _ => {
+                eprintln!("❌ Unexpected error: {e}");
+            }
+        }
+        e
+    })
+}
+
+/// What: Helper function for context-aware retry logic.
+///
+/// Inputs:
+/// - `client`: `ArchClient` instance
+/// - `query`: Search query string
+/// - `max_retries`: Maximum number of retry attempts
+///
+/// Output:
+/// - `Result<Vec<AurPackage>>` containing search results
+///
+/// Details:
+/// - Implements retry logic with context preservation
+async fn search_with_retry(
+    client: &ArchClient,
+    query: &str,
+    max_retries: u32,
+) -> Result<Vec<arch_toolkit::AurPackage>> {
+    let mut last_error = None;
+    for attempt in 1..=max_retries {
+        match client.aur().search(query).await {
+            Ok(packages) => {
+                if attempt > 1 {
+                    println!("   ✓ Search succeeded after {attempt} attempts");
+                }
+                return Ok(packages);
+            }
+            Err(e) => {
+                last_error = Some(e);
+                if attempt < max_retries {
+                    match &last_error {
+                        Some(ArchToolkitError::SearchFailed { query, .. }) => {
+                            println!(
+                                "   ⚠ Attempt {attempt} failed for query '{query}', retrying..."
+                            );
+                        }
+                        _ => {
+                            println!("   ⚠ Attempt {attempt} failed, retrying...");
+                        }
+                    }
+                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                }
+            }
+        }
+    }
+    Err(last_error.expect("last_error should be Some after loop"))
+}
+
+/// What: Helper function for batch package fetching.
+///
+/// Inputs:
+/// - `client`: `ArchClient` instance
+/// - `packages`: Slice of package names to fetch
+///
+/// Output:
+/// - `Vec<(String, Result<AurPackageDetails>)>` containing results for each package
+///
+/// Details:
+/// - Fetches multiple packages with per-item error handling
+async fn fetch_multiple_packages(
+    client: &ArchClient,
+    packages: &[&str],
+) -> Vec<(String, Result<arch_toolkit::AurPackageDetails>)> {
+    let mut results = Vec::new();
+    match client.aur().info(packages).await {
+        Ok(details) => {
+            // Success case - all packages found
+            let found_names: Vec<String> = details.iter().map(|d| d.name.clone()).collect();
+            for detail in details {
+                results.push((detail.name.clone(), Ok(detail)));
+            }
+            // Check for missing packages
+            for package in packages {
+                if !found_names.contains(&package.to_string()) {
+                    results.push((
+                        (*package).to_string(),
+                        Err(ArchToolkitError::PackageNotFound {
+                            package: (*package).to_string(),
+                        }),
+                    ));
+                }
+            }
+        }
+        Err(e) => {
+            // Extract package names from error if possible
+            match &e {
+                ArchToolkitError::InfoFailed { packages, .. } => {
+                    println!("   ⚠ Batch fetch failed for packages: {packages}");
+                    // For demonstration, create individual errors for each package
+                    for package in packages.split(", ") {
+                        results.push((
+                            package.to_string(),
+                            Err(ArchToolkitError::InfoFailed {
+                                packages: packages.clone(),
+                                source: create_mock_error(),
+                            }),
+                        ));
+                    }
+                }
+                _ => {
+                    // Fallback: mark all as failed
+                    for package in packages {
+                        results.push((
+                            (*package).to_string(),
+                            Err(ArchToolkitError::InfoFailed {
+                                packages: packages.join(", "),
+                                source: create_mock_error(),
+                            }),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    results
+}
+
+/// What: Helper function to categorize errors.
+///
+/// Inputs:
+/// - `error`: Error to categorize
+///
+/// Output:
+/// - `&'static str` containing error category
+///
+/// Details:
+/// - Categorizes errors into types for better error handling
+const fn categorize_error(error: &ArchToolkitError) -> &'static str {
+    match error {
+        ArchToolkitError::SearchFailed { .. }
+        | ArchToolkitError::InfoFailed { .. }
+        | ArchToolkitError::CommentsFailed { .. }
+        | ArchToolkitError::PkgbuildFailed { .. }
+        | ArchToolkitError::Network(_) => "Network Error",
+        ArchToolkitError::Json(_) | ArchToolkitError::Parse(_) => "Parsing Error",
+        ArchToolkitError::RateLimited { .. } => "Rate Limit Error",
+        ArchToolkitError::PackageNotFound { .. } => "Not Found Error",
+        ArchToolkitError::InvalidInput(_) => "Input Error",
+        ArchToolkitError::EmptyInput { .. }
+        | ArchToolkitError::InvalidPackageName { .. }
+        | ArchToolkitError::InvalidSearchQuery { .. }
+        | ArchToolkitError::InputTooLong { .. } => "Validation Error",
+    }
 }
 
 /// What: Demonstrate practical error handling patterns.
 ///
 /// Inputs:
-/// - `client`: ArchClient instance
+/// - `client`: `ArchClient` instance
 ///
 /// Output:
 /// - `Result<()>` indicating success or failure
@@ -333,25 +509,6 @@ async fn demonstrate_practical_patterns(client: &ArchClient) -> Result<()> {
 
     // Pattern 1: User-friendly error messages
     println!("1. User-Friendly Error Messages:");
-    async fn search_with_friendly_error(
-        client: &ArchClient,
-        query: &str,
-    ) -> Result<Vec<arch_toolkit::AurPackage>> {
-        client.aur().search(query).await.map_err(|e| {
-            match &e {
-                ArchToolkitError::SearchFailed { query, .. } => {
-                    eprintln!("❌ Search failed for query: '{query}'");
-                    eprintln!("   Please check your internet connection and try again.");
-                }
-                _ => {
-                    eprintln!("❌ Unexpected error: {e}");
-                }
-            }
-            e
-        })
-    }
-
-    // Try a search (will succeed or show friendly error)
     match search_with_friendly_error(client, "yay").await {
         Ok(packages) => {
             println!("   ✓ Search succeeded: found {} packages", packages.len());
@@ -364,42 +521,6 @@ async fn demonstrate_practical_patterns(client: &ArchClient) -> Result<()> {
 
     // Pattern 2: Context-aware retry logic
     println!("2. Context-Aware Retry Logic:");
-    async fn search_with_retry(
-        client: &ArchClient,
-        query: &str,
-        max_retries: u32,
-    ) -> Result<Vec<arch_toolkit::AurPackage>> {
-        let mut last_error = None;
-        for attempt in 1..=max_retries {
-            match client.aur().search(query).await {
-                Ok(packages) => {
-                    if attempt > 1 {
-                        println!("   ✓ Search succeeded after {attempt} attempts");
-                    }
-                    return Ok(packages);
-                }
-                Err(e) => {
-                    last_error = Some(e);
-                    if attempt < max_retries {
-                        match &last_error {
-                            Some(ArchToolkitError::SearchFailed { query, .. }) => {
-                                println!(
-                                    "   ⚠ Attempt {attempt} failed for query '{query}', retrying..."
-                                );
-                            }
-                            _ => {
-                                println!("   ⚠ Attempt {attempt} failed, retrying...");
-                            }
-                        }
-                        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                    }
-                }
-            }
-        }
-        Err(last_error.unwrap())
-    }
-
-    // Try search with retry (will succeed or show retry attempts)
     match search_with_retry(client, "yay", 3).await {
         Ok(packages) => {
             println!("   ✓ Search succeeded: found {} packages", packages.len());
@@ -412,64 +533,6 @@ async fn demonstrate_practical_patterns(client: &ArchClient) -> Result<()> {
 
     // Pattern 3: Batch operation with per-item error handling
     println!("3. Batch Operation with Per-Item Error Handling:");
-    async fn fetch_multiple_packages(
-        client: &ArchClient,
-        packages: &[&str],
-    ) -> Vec<(String, Result<arch_toolkit::AurPackageDetails>)> {
-        let mut results = Vec::new();
-        match client.aur().info(packages).await {
-            Ok(details) => {
-                // Success case - all packages found
-                let found_names: Vec<String> = details.iter().map(|d| d.name.clone()).collect();
-                for detail in details {
-                    results.push((detail.name.clone(), Ok(detail)));
-                }
-                // Check for missing packages
-                for package in packages {
-                    if !found_names.contains(&package.to_string()) {
-                        results.push((
-                            (*package).to_string(),
-                            Err(ArchToolkitError::PackageNotFound {
-                                package: (*package).to_string(),
-                            }),
-                        ));
-                    }
-                }
-            }
-            Err(e) => {
-                // Extract package names from error if possible
-                match &e {
-                    ArchToolkitError::InfoFailed { packages, .. } => {
-                        println!("   ⚠ Batch fetch failed for packages: {packages}");
-                        // For demonstration, create individual errors for each package
-                        for package in packages.split(", ") {
-                            results.push((
-                                package.to_string(),
-                                Err(ArchToolkitError::InfoFailed {
-                                    packages: packages.clone(),
-                                    source: create_mock_error(),
-                                }),
-                            ));
-                        }
-                    }
-                    _ => {
-                        // Fallback: mark all as failed
-                        for package in packages {
-                            results.push((
-                                (*package).to_string(),
-                                Err(ArchToolkitError::InfoFailed {
-                                    packages: packages.join(", "),
-                                    source: create_mock_error(),
-                                }),
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-        results
-    }
-
     let results = fetch_multiple_packages(client, &["yay", "paru"]).await;
     for (package, result) in results {
         match result {
@@ -485,24 +548,6 @@ async fn demonstrate_practical_patterns(client: &ArchClient) -> Result<()> {
 
     // Pattern 4: Error categorization
     println!("4. Error Categorization:");
-    fn categorize_error(error: &ArchToolkitError) -> &'static str {
-        match error {
-            ArchToolkitError::SearchFailed { .. }
-            | ArchToolkitError::InfoFailed { .. }
-            | ArchToolkitError::CommentsFailed { .. }
-            | ArchToolkitError::PkgbuildFailed { .. }
-            | ArchToolkitError::Network(_) => "Network Error",
-            ArchToolkitError::Json(_) | ArchToolkitError::Parse(_) => "Parsing Error",
-            ArchToolkitError::RateLimited { .. } => "Rate Limit Error",
-            ArchToolkitError::PackageNotFound { .. } => "Not Found Error",
-            ArchToolkitError::InvalidInput(_) => "Input Error",
-            ArchToolkitError::EmptyInput { .. } => "Validation Error",
-            ArchToolkitError::InvalidPackageName { .. } => "Validation Error",
-            ArchToolkitError::InvalidSearchQuery { .. } => "Validation Error",
-            ArchToolkitError::InputTooLong { .. } => "Validation Error",
-        }
-    }
-
     let errors = vec![
         ArchToolkitError::search_failed("yay", create_mock_error()),
         ArchToolkitError::PackageNotFound {
@@ -526,13 +571,12 @@ async fn demonstrate_practical_patterns(client: &ArchClient) -> Result<()> {
 ///
 /// Inputs: None
 ///
-/// Output:
-/// - `Result<()>` indicating success or failure
+/// Output: None
 ///
 /// Details:
 /// - Shows the difference between generic and contextual errors
 /// - Demonstrates the value of rich error context
-fn demonstrate_error_comparison() -> Result<()> {
+fn demonstrate_error_comparison() {
     println!("Error Message Comparison:");
     println!("──────────────────────────\n");
 
@@ -569,8 +613,6 @@ fn demonstrate_error_comparison() -> Result<()> {
     println!("  Error 2: AUR search failed for query 'paru': connection timed out");
     println!("  Error 3: AUR search failed for query 'pacman': connection timed out");
     println!("  ✓ Clear: All three queries failed, but we know which ones!\n");
-
-    Ok(())
 }
 
 /// What: Demonstrate input validation error handling.

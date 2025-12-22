@@ -99,15 +99,39 @@ pub mod client;
 #[cfg(feature = "aur")]
 pub mod cache;
 
+#[cfg(feature = "aur")]
+pub mod health;
+
+/// Prelude module for convenient imports.
+///
+/// This module re-exports commonly used types, traits, and functions,
+/// allowing you to import everything you need with a single `use arch_toolkit::prelude::*;`.
+///
+/// # Example
+///
+/// ```no_run
+/// use arch_toolkit::prelude::*;
+///
+/// # async fn example() -> Result<()> {
+/// let client = ArchClient::new()?;
+/// let packages: Vec<AurPackage> = client.aur().search("yay").await?;
+/// Ok(())
+/// # }
+/// ```
+pub mod prelude;
+
 // Re-export commonly used types
 pub use error::{ArchToolkitError as Error, Result};
 pub use types::{AurComment, AurPackage, AurPackageDetails};
 
 #[cfg(feature = "aur")]
+pub use types::{HealthStatus, ServiceStatus};
+
+#[cfg(feature = "aur")]
 pub use aur::{AurApi, MockAurApi};
 
 #[cfg(feature = "aur")]
-pub use client::{ArchClient, ArchClientBuilder, CacheInvalidator};
+pub use client::{ArchClient, ArchClientBuilder, CacheInvalidator, RetryPolicy};
 
 #[cfg(feature = "aur")]
 pub use cache::{CacheConfig, CacheConfigBuilder};
