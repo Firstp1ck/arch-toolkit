@@ -2,6 +2,32 @@
 
 This document analyzes framework-agnostic modules in Pacsea (`src/sources/`, `src/logic/`, `src/index/`, `src/install/`) for extraction into a unified `arch-toolkit` crate with feature flags. This single crate approach is recommended over multiple separate crates for better maintainability, shared types, and user experience.
 
+## Current Status
+
+**Phase 1 (MVP) - AUR Module: ✅ COMPLETED**
+
+- **Version**: v0.1.0 (published 2025-12-21)
+- **Status**: Published to crates.io and ready for use
+- **Completed Features**:
+  - ✅ Core infrastructure (types, error handling, HTTP client, builder pattern)
+  - ✅ AUR search, info, comments, PKGBUILD fetching
+  - ✅ Rate limiting with exponential backoff
+  - ✅ Retry policy with configurable backoff
+  - ✅ Optional caching layer (memory + disk)
+  - ✅ Mock API for testing
+  - ✅ Comprehensive documentation and tests
+  - ✅ CI/CD workflows
+  - ✅ Health check functionality
+  - ✅ Environment variable configuration
+
+**Phase 2+ - Remaining Modules: ⏳ PLANNED**
+
+- Dependencies module (SRCINFO parsing, dependency resolution)
+- Index module (package database queries)
+- Install module (command building)
+- News module (RSS feeds, advisories)
+- Sandbox module (PKGBUILD security analysis)
+
 ## Existing Crates on crates.io
 
 Before proceeding, here's a comprehensive analysis of what already exists in the Rust ecosystem:
@@ -137,12 +163,56 @@ The proposed `arch-toolkit` would offer:
 ### ✅ Strong Points
 
 1. **Well-documented code** - All functions have rustdoc comments with What/Inputs/Output/Details format
-2. **Comprehensive functionality** - Covers AUR search, details, comments, PKGBUILD fetching, news feeds, security advisories
-3. **Rate limiting built-in** - Has backoff and circuit breaker logic for `archlinux.org`
-4. **Good test coverage** - Most modules have unit tests
+2. **Comprehensive AUR functionality** - Covers AUR search, details, comments, PKGBUILD fetching
+3. **Rate limiting built-in** - Has exponential backoff and semaphore-based serialization for `archlinux.org`
+4. **Good test coverage** - Unit tests and integration tests for core functionality
 5. **Async-first design** - Uses `tokio` for async operations
+6. **Optional caching layer** - Memory and disk caching with configurable TTLs
+7. **Retry policy** - Configurable retry with exponential backoff and error classification
+8. **Mock testing support** - `MockAurApi` trait for dependency injection in tests
+9. **Environment variable configuration** - Support for configuring client via environment variables
+10. **Health check functionality** - Service status checking for archlinux.org endpoints
 
-### ❌ Blockers for Publication
+### ✅ Completed (Phase 1 - MVP)
+
+The AUR module has been successfully extracted and published as v0.1.0:
+
+1. **Core Infrastructure** ✅
+   - Standalone types (`AurPackage`, `AurPackageDetails`, `AurComment`, `HealthStatus`, `ServiceStatus`)
+   - Unified error type (`ArchToolkitError` with operation-specific variants)
+   - Replaced curl with reqwest
+   - Shared HTTP client with rate limiting (exponential backoff + semaphore serialization)
+   - Builder pattern (`ArchClientBuilder` with environment variable support)
+
+2. **AUR Module** ✅
+   - AUR search (RPC v5, up to 200 results)
+   - AUR info (batch queries, comprehensive package details)
+   - Comments scraping (HTML parsing, date parsing, pinned comment detection)
+   - PKGBUILD fetching (cgit with dual-level rate limiting)
+   - Rate limiting (exponential backoff with jitter, semaphore-based serialization)
+   - Retry policy (configurable per-operation, exponential backoff, retry-after header support)
+   - Caching layer (memory LRU + disk cache with JSON serialization, cache promotion)
+   - Mock API for testing (`MockAurApi` trait implementation)
+   - Validation config (package name validation, search query validation)
+
+3. **Documentation & Testing** ✅
+   - Comprehensive rustdoc comments (What/Inputs/Output/Details format)
+   - Feature flag documentation (README and Cargo.toml)
+   - Unit and integration tests (cache integration tests)
+   - Example programs (`examples/aur_example.rs`, `examples/with_caching.rs`)
+
+4. **Additional Features** ✅ (Beyond original plan)
+   - Health check functionality (`health.rs` - service status checking)
+   - Environment variable configuration (`env.rs` - config via env vars)
+   - Cache invalidation API (`CacheInvalidator` - manual cache management)
+   - Utility functions (URL encoding, JSON parsing helpers)
+   - Prelude module for convenient imports
+
+### ⏳ Remaining Work (Future Phases)
+
+The following modules are planned but not yet implemented:
+
+### ❌ Blockers for Remaining Modules
 
 #### 1. **Heavy Internal Dependencies**
 
@@ -390,21 +460,37 @@ arch-toolkit/
 ### High Priority (Required for Publication)
 
 #### Core Infrastructure
-- [ ] **Define standalone types** - Create `types/` module with all data structures independent of Pacsea
-- [ ] **Create unified error type** - Define `ArchToolkitError` enum using `thiserror` instead of `Box<dyn Error>`
-- [ ] **Replace curl with reqwest** - Remove dependency on `crate::util::curl`, use `reqwest` directly
-- [ ] **Shared HTTP client** - Create `client.rs` with rate limiting and circuit breaker logic
-- [ ] **Add builder pattern** - Allow configuring timeouts, user agent, rate limits per module
+- [x] **Define standalone types** - Create `types/` module with all data structures independent of Pacsea
+  - ✅ Implemented: `AurPackage`, `AurPackageDetails`, `AurComment` in `src/types/package.rs`
+  - ✅ Implemented: `HealthStatus`, `ServiceStatus` in `src/types/health.rs`
+- [x] **Create unified error type** - Define `ArchToolkitError` enum using `thiserror` instead of `Box<dyn Error>`
+  - ✅ Implemented: Comprehensive error enum in `src/error.rs` with operation-specific variants
+- [x] **Replace curl with reqwest** - Remove dependency on `crate::util::curl`, use `reqwest` directly
+  - ✅ Implemented: All HTTP operations use `reqwest` directly
+- [x] **Shared HTTP client** - Create `client.rs` with rate limiting and circuit breaker logic
+  - ✅ Implemented: `ArchClient` with exponential backoff rate limiting, semaphore-based serialization
+  - ✅ Implemented: Dual-level rate limiting (base delay + exponential backoff with jitter)
+- [x] **Add builder pattern** - Allow configuring timeouts, user agent, rate limits per module
+  - ✅ Implemented: `ArchClientBuilder` with timeout, user agent, retry policy, cache config, validation config
+  - ✅ Implemented: Environment variable support via `from_env()` and `with_env()`
 
 #### AUR Module (`feature = "aur"`)
-- [ ] **Remove state dependency** - Extract only stateless API functions
-- [ ] **Remove i18n dependency** - Either return English-only or accept translation function as parameter
-- [ ] **Remove index dependency** - Don't call `crate::index::*` functions, let callers handle enrichment
-- [ ] **Remove logic dependency** - Don't call `get_pkgbuild_from_cache`, let callers provide caching
-- [ ] **Port AUR search** - From `src/sources/search.rs`
-- [ ] **Port AUR info** - From `src/sources/details.rs` (AUR parts only)
-- [ ] **Port comments scraping** - From `src/sources/comments.rs`
-- [ ] **Port PKGBUILD fetching** - From `src/sources/pkgbuild.rs`
+- [x] **Remove state dependency** - Extract only stateless API functions
+  - ✅ Implemented: All AUR operations are stateless, no dependency on Pacsea's `AppState`
+- [x] **Remove i18n dependency** - Either return English-only or accept translation function as parameter
+  - ✅ Implemented: All operations return English-only data, no i18n coupling
+- [x] **Remove index dependency** - Don't call `crate::index::*` functions, let callers handle enrichment
+  - ✅ Implemented: AUR operations are independent, no index queries
+- [x] **Remove logic dependency** - Don't call `get_pkgbuild_from_cache`, let callers provide caching
+  - ✅ Implemented: Optional caching layer via `CacheConfig`, no hard dependency on Pacsea's cache
+- [x] **Port AUR search** - From `src/sources/search.rs`
+  - ✅ Implemented: `Aur::search()` using AUR RPC v5, returns up to 200 results
+- [x] **Port AUR info** - From `src/sources/details.rs` (AUR parts only)
+  - ✅ Implemented: `Aur::info()` with batch query support, comprehensive package details
+- [x] **Port comments scraping** - From `src/sources/comments.rs`
+  - ✅ Implemented: `Aur::comments()` with HTML parsing, date parsing, pinned comment detection
+- [x] **Port PKGBUILD fetching** - From `src/sources/pkgbuild.rs`
+  - ✅ Implemented: `Aur::pkgbuild()` fetching from AUR cgit with rate limiting
 
 #### Dependencies Module (`feature = "deps"`)
 - [ ] **Port dependency parsing** - From `src/logic/deps/parse.rs`
@@ -436,19 +522,40 @@ arch-toolkit/
 - [ ] **Port sandbox parsing** - From `src/logic/sandbox/parse.rs`
 
 #### Documentation & Testing
-- [ ] **Write comprehensive docs** - Add crate-level documentation with examples for each module
-- [ ] **Add feature flag documentation** - Document which features enable which modules
-- [ ] **Port existing tests** - Adapt Pacsea's tests to work with new API
-- [ ] **Add integration tests** - Test feature combinations
+- [x] **Write comprehensive docs** - Add crate-level documentation with examples for each module
+  - ✅ Implemented: Comprehensive rustdoc comments with What/Inputs/Output/Details format
+  - ✅ Implemented: Crate-level documentation in `src/lib.rs` with usage examples
+  - ✅ Implemented: README with quick start examples
+- [x] **Add feature flag documentation** - Document which features enable which modules
+  - ✅ Implemented: Feature flags documented in README and Cargo.toml
+- [x] **Port existing tests** - Adapt Pacsea's tests to work with new API
+  - ✅ Implemented: Unit tests for search, info, comments, pkgbuild parsing
+  - ✅ Implemented: Cache integration tests in `tests/cache_integration.rs`
+- [x] **Add integration tests** - Test feature combinations
+  - ✅ Implemented: Integration tests for caching layer with memory and disk backends
 
 ### Medium Priority (Nice to Have)
 
-- [ ] **Add retry logic** - Configurable retry with exponential backoff
-- [ ] **Add caching layer** - Optional caching trait for callers to implement
+- [x] **Add retry logic** - Configurable retry with exponential backoff
+  - ✅ Implemented: `RetryPolicy` with per-operation enable/disable flags
+  - ✅ Implemented: Exponential backoff with configurable initial/max delays and jitter
+  - ✅ Implemented: Automatic retry-after header handling
+  - ✅ Implemented: Error classification (timeouts, 5xx, 429 are retryable)
+- [x] **Add caching layer** - Optional caching trait for callers to implement
+  - ✅ Implemented: Generic `Cache<K, V>` trait for extensibility
+  - ✅ Implemented: `MemoryCache` (LRU) and `DiskCache` implementations
+  - ✅ Implemented: `CacheConfig` with per-operation TTL configuration
+  - ✅ Implemented: Cache promotion from disk to memory on hit
+  - ✅ Implemented: `CacheInvalidator` API for manual cache management
 - [ ] **Add pagination support** - Handle large result sets
+  - ⏳ Not yet implemented (AUR RPC returns up to 200 results, which is usually sufficient)
 - [ ] **Add streaming support** - Return streams for large responses
-- [ ] **Add mock testing support** - Mockable HTTP client for testing
-- [ ] **Add CI/CD setup** - GitHub Actions for testing and publishing
+  - ⏳ Not yet implemented (current API returns complete results)
+- [x] **Add mock testing support** - Mockable HTTP client for testing
+  - ✅ Implemented: `MockAurApi` trait implementation for testing
+  - ✅ Implemented: `AurApi` trait for dependency injection
+- [x] **Add CI/CD setup** - GitHub Actions for testing and publishing
+  - ✅ Implemented: GitHub Actions workflows for build, test, docs, release, and security analysis
 
 ### Low Priority (Future)
 
@@ -665,29 +772,46 @@ This would:
 
 ## Conclusion
 
-The framework-agnostic modules in Pacsea contain valuable functionality but are **not ready for extraction** in their current state due to:
+### Phase 1 Status: ✅ COMPLETED
 
-1. Heavy coupling to Pacsea's internal types (`PackageItem`, `AppState`, etc.)
-2. Dependency on custom curl wrapper instead of standard HTTP client
-3. Dependencies on i18n and index systems
-4. Tight integration with Pacsea's caching and state management
+The AUR module has been successfully extracted from Pacsea and published as `arch-toolkit v0.1.0`. All blockers have been resolved:
+
+1. ✅ **Decoupled from Pacsea types** - Created standalone types (`AurPackage`, `AurPackageDetails`, `AurComment`)
+2. ✅ **Replaced curl with reqwest** - All HTTP operations use standard `reqwest` client
+3. ✅ **Removed i18n dependency** - All operations return English-only data
+4. ✅ **Optional caching** - Caching is optional via `CacheConfig`, no hard dependencies
+
+### Remaining Modules
+
+The following modules from Pacsea still need extraction (future phases):
+
+1. **Dependencies Module** - SRCINFO parsing, dependency resolution, reverse deps
+2. **Index Module** - Installed package queries, official repo queries, mirror management
+3. **Install Module** - Pacman command building, AUR helper detection, batch operations
+4. **News Module** - Arch news RSS, security advisories
+5. **Sandbox Module** - PKGBUILD security analysis
+
+These modules may still have blockers similar to what the AUR module had:
 
 ### Recommended Approach
 
 **Create a unified `arch-toolkit` crate** with feature flags, starting fresh with a clean API design:
 
-1. **Phase 1 (MVP)**: Extract AUR module only (~20-30 hours)
+1. **Phase 1 (MVP)**: Extract AUR module only (~20-30 hours) ✅ **COMPLETED**
    - Most reusable and independent
    - Can be published and used immediately
    - Validates the approach
+   - **Status**: Published as v0.1.0 on 2025-12-21
 
-2. **Phase 2**: Add dependencies module (~6-8 hours)
+2. **Phase 2**: Add dependencies module (~6-8 hours) ⏳ **PLANNED**
    - High reuse value
    - Complements AUR module
+   - **Status**: Not yet started
 
-3. **Phase 3**: Add remaining modules incrementally
+3. **Phase 3**: Add remaining modules incrementally ⏳ **PLANNED**
    - Index, install, news, sandbox as needed
    - Each can be added independently
+   - **Status**: Not yet started
 
 ### Benefits of Unified Crate
 
@@ -700,12 +824,20 @@ The framework-agnostic modules in Pacsea contain valuable functionality but are 
 
 ### Migration Strategy for Pacsea
 
-Once `arch-toolkit` is published, Pacsea can:
+Now that `arch-toolkit v0.1.0` is published, Pacsea can:
 
-1. Add `arch-toolkit` as dependency with `features = ["full"]`
-2. Gradually replace internal modules with toolkit calls
-3. Remove duplicated code from Pacsea
-4. Focus development on TUI-specific features
+1. ✅ Add `arch-toolkit` as dependency with `features = ["aur"]`
+2. ⏳ Gradually replace AUR-related modules with toolkit calls
+   - Replace `src/sources/search.rs` with `arch_toolkit::ArchClient::aur().search()`
+   - Replace `src/sources/details.rs` (AUR parts) with `arch_toolkit::ArchClient::aur().info()`
+   - Replace `src/sources/comments.rs` with `arch_toolkit::ArchClient::aur().comments()`
+   - Replace `src/sources/pkgbuild.rs` with `arch_toolkit::ArchClient::aur().pkgbuild()`
+3. ⏳ Remove duplicated AUR code from Pacsea
+4. ⏳ Focus development on TUI-specific features
+
+**Next Steps for Remaining Modules:**
+- Once dependencies, index, install, news, and sandbox modules are added to arch-toolkit, Pacsea can migrate those as well
+- This will further reduce Pacsea's codebase size and maintenance burden
 
 This approach benefits both the toolkit (real-world usage and testing) and Pacsea (reduced maintenance burden).
 

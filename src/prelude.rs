@@ -39,10 +39,8 @@
 //! use arch_toolkit::prelude::*;
 //!
 //! # async fn example() -> Result<()> {
-//! let mut mock = MockAurApi::new();
-//! mock.expect_search()
-//!     .with_query("yay")
-//!     .returning(|| Ok(vec![]));
+//! let mock = MockAurApi::new()
+//!     .with_search_result("yay", Ok(vec![]));
 //! let packages = mock.search("yay").await?;
 //! Ok(())
 //! # }
