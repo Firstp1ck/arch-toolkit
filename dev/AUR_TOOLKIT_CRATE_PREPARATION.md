@@ -493,6 +493,9 @@ arch-toolkit/
   - ✅ Implemented: `Aur::pkgbuild()` fetching from AUR cgit with rate limiting
 
 #### Dependencies Module (`feature = "deps"`)
+
+**Detailed Plan**: [DEPENDENCIES_MODULE_PHASE.md](./DEPENDENCIES_MODULE_PHASE.md)
+
 - [ ] **Port dependency parsing** - From `src/logic/deps/parse.rs`
 - [ ] **Port dependency resolution** - From `src/logic/deps/resolve.rs`
 - [ ] **Port reverse deps** - From `src/logic/deps/reverse.rs`
@@ -803,10 +806,11 @@ These modules may still have blockers similar to what the AUR module had:
    - Validates the approach
    - **Status**: Published as v0.1.0 on 2025-12-21
 
-2. **Phase 2**: Add dependencies module (~6-8 hours) ⏳ **PLANNED**
+2. **Phase 2**: Add dependencies module (~30-40 hours) ⏳ **PLANNED**
    - High reuse value
    - Complements AUR module
-   - **Status**: Not yet started
+   - **Status**: Detailed plan created
+   - **Plan Document**: [DEPENDENCIES_MODULE_PHASE.md](./DEPENDENCIES_MODULE_PHASE.md)
 
 3. **Phase 3**: Add remaining modules incrementally ⏳ **PLANNED**
    - Index, install, news, sandbox as needed

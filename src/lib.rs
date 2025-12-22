@@ -105,6 +105,9 @@ pub mod health;
 #[cfg(feature = "aur")]
 mod env;
 
+#[cfg(feature = "deps")]
+pub mod deps;
+
 /// Prelude module for convenient imports.
 ///
 /// This module re-exports commonly used types, traits, and functions,

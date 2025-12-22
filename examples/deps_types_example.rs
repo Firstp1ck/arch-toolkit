@@ -5,12 +5,10 @@
 //! - Dependency source determination
 //! - Package references for dependency resolution
 //! - Parsing dependency specifications
+//! - Parsing pacman -Si output for dependencies and conflicts
 //! - Working with .SRCINFO data structures
 //! - Reverse dependency summaries
 //! - Display formatting and serialization
-//!
-//! Note: This example focuses on the types themselves. For actual dependency
-//! resolution functionality, see the deps module documentation once implemented.
 
 #[cfg(not(feature = "deps"))]
 fn main() {
@@ -19,11 +17,12 @@ fn main() {
 }
 
 #[cfg(feature = "deps")]
-#[allow(clippy::too_many_lines)] // Example file - comprehensive demonstration
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)] // Example file - comprehensive demonstration
 fn main() {
     use arch_toolkit::{
-        Dependency, DependencySource, DependencySpec, DependencyStatus, PackageRef, PackageSource,
+        Dependency, DependencySource, DependencyStatus, PackageRef, PackageSource,
         ReverseDependencySummary, SrcinfoData,
+        deps::{parse_dep_spec, parse_pacman_si_conflicts, parse_pacman_si_deps},
     };
 
     println!("╔═══════════════════════════════════════════════════════════════╗");
@@ -135,19 +134,9 @@ fn main() {
         "rust>=1.70.0",
     ];
 
-    println!("Parsing dependency strings:\n");
+    println!("Parsing dependency strings using parse_dep_spec():\n");
     for dep_str in &dep_strings {
-        // In real usage, this would use parse_dep_spec() from the deps module
-        // For now, demonstrate manual creation
-        let spec = dep_str
-            .find(['>', '<', '='])
-            .map_or_else(
-                || DependencySpec::new(dep_str.to_string()),
-                |pos| {
-                    let (name, version) = dep_str.split_at(pos);
-                    DependencySpec::with_version(name.trim(), version.trim())
-                },
-            );
+        let spec = parse_dep_spec(dep_str);
 
         println!("  Input:  \"{dep_str}\"");
         println!("  Output: {spec}");
@@ -164,9 +153,107 @@ fn main() {
     }
 
     // ========================================================================
-    // Example 5: Creating Dependency Instances
+    // Example 5: Parsing Pacman -Si Output for Dependencies
     // ========================================================================
-    println!("┌─ Example 5: Creating Dependency Instances ────────────────────┐");
+    println!("┌─ Example 5: Parsing Pacman -Si Dependencies ──────────────────┐");
+    println!("│ Extracting dependencies from pacman -Si output                  │");
+    println!("└──────────────────────────────────────────────────────────────┘");
+
+    #[allow(clippy::needless_raw_string_hashes)]
+    let pacman_output = r#"Repository      : extra
+Name            : firefox
+Version         : 121.0-1
+Description     : Standalone web browser from mozilla.org
+Architecture    : x86_64
+URL             : https://www.mozilla.org/firefox/
+Licenses        : MPL  GPL  LGPL
+Groups          : None
+Provides        : None
+Depends On      : glibc gtk3 libpulse nss libxt libxss libxcomposite libxdamage
+                  libxfixes libxrandr libxrender libx11 libxcb libxkbcommon
+                  libxkbcommon-x11 libdrm libxshmfence libgl libxext libxfixes
+                  libxrender libxtst libxrandr libxss libxcomposite libxdamage
+                  libxfixes libxrandr libxrender libx11 libxcb libxkbcommon
+                  libxkbcommon-x11 libdrm libxshmfence libgl libxext libxfixes
+                  libxrender libxtst libxrandr libxss libxcomposite libxdamage
+Optional Deps   : None
+Required By     : None
+Optional For    : None
+Conflicts With  : None
+Replaces        : None"#;
+
+    println!("Sample pacman -Si output:\n");
+    println!(
+        "{}",
+        pacman_output.lines().take(5).collect::<Vec<_>>().join("\n")
+    );
+    println!("...\n");
+
+    let deps = parse_pacman_si_deps(pacman_output);
+    println!("Extracted dependencies ({}):\n", deps.len());
+    for (i, dep) in deps.iter().take(10).enumerate() {
+        println!("  {}. {dep}", i + 1);
+    }
+    if deps.len() > 10 {
+        println!("  ... and {} more", deps.len() - 10);
+    }
+    println!();
+
+    // Example with "None"
+    let pacman_output_none = "Name            : base\nDepends On      : None\n";
+    let deps_none = parse_pacman_si_deps(pacman_output_none);
+    println!("Package with no dependencies:");
+    println!("  Output: {} dependencies", deps_none.len());
+    println!();
+
+    // ========================================================================
+    // Example 6: Parsing Pacman -Si Output for Conflicts
+    // ========================================================================
+    println!("┌─ Example 6: Parsing Pacman -Si Conflicts ─────────────────────┐");
+    println!("│ Extracting conflicts from pacman -Si output                   │");
+    println!("└──────────────────────────────────────────────────────────────┘");
+
+    #[allow(clippy::needless_raw_string_hashes)]
+    let pacman_output_conflicts = r#"Name            : vim
+Version         : 9.1.0000-1
+Conflicts With  : gvim vi
+Replaces        : vi"#;
+
+    println!("Sample pacman -Si output with conflicts:\n");
+    println!("{pacman_output_conflicts}\n");
+
+    let conflicts = parse_pacman_si_conflicts(pacman_output_conflicts);
+    println!("Extracted conflicts ({}):\n", conflicts.len());
+    for conflict in &conflicts {
+        println!("  • {conflict}");
+    }
+    println!();
+
+    // Example with version constraints
+    let pacman_output_conflicts_versions = "Conflicts With  : old-pkg<2.0 new-pkg>=3.0\n";
+    let conflicts_versions = parse_pacman_si_conflicts(pacman_output_conflicts_versions);
+    println!("Conflicts with version constraints:");
+    println!("  Input:  {pacman_output_conflicts_versions}");
+    println!(
+        "  Output: {} conflicts (version constraints removed)",
+        conflicts_versions.len()
+    );
+    for conflict in &conflicts_versions {
+        println!("    • {conflict}");
+    }
+    println!();
+
+    // Example with "None"
+    let pacman_output_conflicts_none = "Name            : base\nConflicts With : None\n";
+    let conflicts_none = parse_pacman_si_conflicts(pacman_output_conflicts_none);
+    println!("Package with no conflicts:");
+    println!("  Output: {} conflicts", conflicts_none.len());
+    println!();
+
+    // ========================================================================
+    // Example 7: Creating Dependency Instances
+    // ========================================================================
+    println!("┌─ Example 7: Creating Dependency Instances ────────────────────┐");
     println!("│ Building complete dependency information                       │");
     println!("└──────────────────────────────────────────────────────────────┘");
 
@@ -236,9 +323,9 @@ fn main() {
     }
 
     // ========================================================================
-    // Example 6: PackageRef - Input for Resolution
+    // Example 8: PackageRef - Input for Resolution
     // ========================================================================
-    println!("┌─ Example 6: PackageRef - Resolution Input ────────────────────┐");
+    println!("┌─ Example 8: PackageRef - Resolution Input ────────────────────┐");
     println!("│ Creating package references for dependency resolution          │");
     println!("└──────────────────────────────────────────────────────────────┘");
 
@@ -266,9 +353,9 @@ fn main() {
     println!();
 
     // ========================================================================
-    // Example 7: SrcinfoData - Parsed .SRCINFO
+    // Example 9: SrcinfoData - Parsed .SRCINFO
     // ========================================================================
-    println!("┌─ Example 7: SrcinfoData - Parsed .SRCINFO ────────────────────┐");
+    println!("┌─ Example 9: SrcinfoData - Parsed .SRCINFO ────────────────────┐");
     println!("│ Working with parsed .SRCINFO file data                        │");
     println!("└──────────────────────────────────────────────────────────────┘");
 
@@ -341,9 +428,9 @@ fn main() {
     }
 
     // ========================================================================
-    // Example 8: ReverseDependencySummary
+    // Example 10: ReverseDependencySummary
     // ========================================================================
-    println!("┌─ Example 8: ReverseDependencySummary ─────────────────────────┐");
+    println!("┌─ Example 10: ReverseDependencySummary ─────────────────────────┐");
     println!("│ Analyzing reverse dependency impact                            │");
     println!("└──────────────────────────────────────────────────────────────┘");
 
@@ -381,9 +468,9 @@ fn main() {
     }
 
     // ========================================================================
-    // Example 9: Serialization (JSON)
+    // Example 11: Serialization (JSON)
     // ========================================================================
-    println!("┌─ Example 9: Serialization (JSON) ────────────────────────────┐");
+    println!("┌─ Example 11: Serialization (JSON) ────────────────────────────┐");
     println!("│ Serializing dependency types to JSON                           │");
     println!("└──────────────────────────────────────────────────────────────┘");
 
@@ -412,9 +499,9 @@ fn main() {
     }
 
     // ========================================================================
-    // Example 10: Status Filtering and Analysis
+    // Example 12: Status Filtering and Analysis
     // ========================================================================
-    println!("┌─ Example 10: Status Filtering and Analysis ───────────────────┐");
+    println!("┌─ Example 12: Status Filtering and Analysis ───────────────────┐");
     println!("│ Filtering and analyzing dependencies by status                 │");
     println!("└──────────────────────────────────────────────────────────────┘");
 
@@ -463,15 +550,24 @@ fn main() {
 
     println!("Dependency analysis:\n");
     println!("  Total dependencies: {}", all_deps.len());
-    println!("  Already installed:  {}", all_deps.iter().filter(|d| d.status.is_installed()).count());
-    println!("  Need action:        {}", all_deps.iter().filter(|d| d.status.needs_action()).count());
-    println!("  Conflicts:          {}", all_deps.iter().filter(|d| d.status.is_conflict()).count());
+    println!(
+        "  Already installed:  {}",
+        all_deps.iter().filter(|d| d.status.is_installed()).count()
+    );
+    println!(
+        "  Need action:        {}",
+        all_deps.iter().filter(|d| d.status.needs_action()).count()
+    );
+    println!(
+        "  Conflicts:          {}",
+        all_deps.iter().filter(|d| d.status.is_conflict()).count()
+    );
     println!();
 
     // ========================================================================
-    // Example 11: Priority-Based Sorting
+    // Example 13: Priority-Based Sorting
     // ========================================================================
-    println!("┌─ Example 11: Priority-Based Sorting ─────────────────────────┐");
+    println!("┌─ Example 13: Priority-Based Sorting ─────────────────────────┐");
     println!("│ Sorting dependencies by urgency (priority)                     │");
     println!("└──────────────────────────────────────────────────────────────┘");
 
@@ -540,7 +636,9 @@ fn main() {
     println!("\nThis example demonstrated:");
     println!("  • DependencyStatus enum with all variants and helper methods");
     println!("  • DependencySource and PackageSource enums");
-    println!("  • DependencySpec for parsing dependency strings");
+    println!("  • parse_dep_spec() for parsing dependency specification strings");
+    println!("  • parse_pacman_si_deps() for extracting dependencies from pacman output");
+    println!("  • parse_pacman_si_conflicts() for extracting conflicts from pacman output");
     println!("  • Creating complete Dependency instances");
     println!("  • PackageRef for resolution input");
     println!("  • SrcinfoData for parsed .SRCINFO files");
