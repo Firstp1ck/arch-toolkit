@@ -13,7 +13,7 @@ This document provides a detailed structured plan for implementing the Dependenc
 | **Estimated Effort** | 30-40 hours |
 | **Complexity** | High (system command execution, complex data structures) |
 | **Dependencies** | `types` module, optional `aur` module for AUR package resolution |
-| **Status** | ⏳ In Progress - Task 2.1.1 Complete ✅ |
+| **Status** | ⏳ In Progress - Tasks 2.1.1, 2.1.2, 2.1.3 Complete ✅ |
 
 ## Current Progress
 
@@ -25,11 +25,25 @@ This document provides a detailed structured plan for implementing the Dependenc
   - Example file demonstrating usage
   - Feature flag and exports configured
 
+- **Task 2.1.2: Port Dependency Spec Parsing** - Complete
+  - Created `src/deps/parse.rs` with parsing functions
+  - Ported `parse_dep_spec()`, `parse_pacman_si_deps()`, `parse_pacman_si_conflicts()`
+  - Removed i18n dependency, using English-only labels
+  - Handles multi-line dependencies and deduplication
+  - Comprehensive unit tests
+
+- **Task 2.1.3: Port .SRCINFO Parsing** - Complete
+  - Created `src/deps/srcinfo.rs` with parsing functions
+  - Ported `parse_srcinfo_deps()`, `parse_srcinfo_conflicts()`, `parse_srcinfo()`
+  - Implemented `fetch_srcinfo()` async function with reqwest (requires `aur` feature)
+  - Handles architecture-specific dependencies, split packages, .so filtering
+  - Comprehensive unit tests (11 tests)
+  - Example file `examples/srcinfo_example.rs` demonstrating all features
+
 ### ⏳ In Progress
-- **Task 2.1.2: Port Dependency Spec Parsing** - Next up
+- **Task 2.1.4: Port PKGBUILD Parsing** - Next up
 
 ### 📋 Planned
-- Remaining Phase 2.1 tasks (SRCINFO, PKGBUILD parsing)
 - Phase 2.2-2.6 (Version utils, Query, Resolution, Integration, Testing)
 
 ---
@@ -437,13 +451,14 @@ impl Default for ResolverConfig {
 - [x] Deduplicate dependencies in `parse_pacman_si_deps()` and `parse_pacman_si_conflicts()` (return unique list)
 
 #### Task 2.1.3: Port .SRCINFO Parsing
-- [ ] Create `src/deps/srcinfo.rs`
-- [ ] Port `parse_srcinfo_deps()` function
-- [ ] Port `parse_srcinfo_conflicts()` function
-- [ ] Add new `parse_srcinfo()` function returning `SrcinfoData`
-- [ ] Add async `fetch_srcinfo()` using reqwest (not curl)
-- [ ] Add unit tests with sample .SRCINFO content
-- [ ] Handle edge cases (split packages, architecture-specific deps)
+- [x] Create `src/deps/srcinfo.rs`
+- [x] Port `parse_srcinfo_deps()` function
+- [x] Port `parse_srcinfo_conflicts()` function
+- [x] Add new `parse_srcinfo()` function returning `SrcinfoData`
+- [x] Add async `fetch_srcinfo()` using reqwest (not curl)
+- [x] Add unit tests with sample .SRCINFO content
+- [x] Handle edge cases (split packages, architecture-specific deps)
+- [x] Add example file `examples/srcinfo_example.rs` demonstrating all features
 
 #### Task 2.1.4: Port PKGBUILD Parsing
 - [ ] Create `src/deps/pkgbuild.rs`
@@ -600,7 +615,7 @@ tokio = { version = "1", features = ["rt", "time", "process"], optional = true }
 | DependencySource type coupling | Create standalone type | ✅ Resolved (Task 2.1.1) |
 | PackageItem type coupling | Create simplified PackageRef | ✅ Resolved (Task 2.1.1) |
 | ReverseRootSummary type coupling | Create standalone type | ✅ Resolved (Task 2.1.1) |
-| i18n dependency in parse.rs | Remove, use English-only labels | ⏳ Pending (Task 2.1.2) |
+| i18n dependency in parse.rs | Remove, use English-only labels | ✅ Resolved (Task 2.1.2) |
 | PKGBUILD cache access | Accept optional callback | ⏳ Pending (Task 2.4.1) |
 | Sandbox parse functions | Include in deps module | ⏳ Pending (Task 2.1.4) |
 | Index module coupling | Accept parameters instead | ⏳ Pending (Task 2.3.1) |
@@ -623,32 +638,32 @@ tokio = { version = "1", features = ["rt", "time", "process"], optional = true }
 ## Acceptance Criteria
 
 ### Functionality
-- [ ] Can parse dependency specifications with version constraints
-- [ ] Can parse .SRCINFO files and extract all dependency types
+- [x] Can parse dependency specifications with version constraints - ✅ Task 2.1.2
+- [x] Can parse .SRCINFO files and extract all dependency types - ✅ Task 2.1.3
 - [ ] Can parse PKGBUILD files and extract dependency arrays
 - [ ] Can query installed packages from pacman database
 - [ ] Can resolve dependencies for a list of packages
 - [ ] Can analyze reverse dependencies for removal operations
 - [ ] Graceful degradation when pacman is unavailable
-- [ ] Works without i18n (English-only output)
+- [x] Works without i18n (English-only output) - ✅ Task 2.1.2
 
 ### Code Quality
-- [x] All functions have rustdoc comments (What/Inputs/Output/Details) - ✅ Task 2.1.1
+- [x] All functions have rustdoc comments (What/Inputs/Output/Details) - ✅ Tasks 2.1.1, 2.1.2, 2.1.3
 - [ ] Cyclomatic complexity < 25 for all functions
-- [x] cargo fmt produces no changes - ✅ Task 2.1.1
-- [x] cargo clippy produces no warnings - ✅ Task 2.1.1
-- [x] All tests pass (cargo test -- --test-threads=1) - ✅ Task 2.1.1
+- [x] cargo fmt produces no changes - ✅ Tasks 2.1.1, 2.1.2, 2.1.3
+- [x] cargo clippy produces no warnings - ✅ Tasks 2.1.1, 2.1.2, 2.1.3
+- [x] All tests pass (cargo test -- --test-threads=1) - ✅ Tasks 2.1.1, 2.1.2, 2.1.3
 
 ### Testing
-- [ ] Unit tests for all parsing functions
+- [x] Unit tests for all parsing functions - ✅ Tasks 2.1.2, 2.1.3
 - [ ] Unit tests for version comparison
 - [ ] Integration tests with mock commands
-- [ ] Example program demonstrating usage
+- [x] Example program demonstrating usage - ✅ Tasks 2.1.1, 2.1.3
 
 ### Documentation
-- [x] Module-level documentation with examples - ✅ Task 2.1.1 (types module)
+- [x] Module-level documentation with examples - ✅ Tasks 2.1.1, 2.1.2, 2.1.3
 - [ ] README updated with deps module usage
-- [x] Feature flags documented - ✅ Task 2.1.1 (deps feature added)
+- [x] Feature flags documented - ✅ Tasks 2.1.1, 2.1.3 (deps feature, conditional aur feature)
 
 ---
 
