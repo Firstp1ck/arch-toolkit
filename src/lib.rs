@@ -7,7 +7,7 @@
 //! # Features
 //!
 //! - `aur`: AUR search, package info, comments, and PKGBUILD fetching
-//! - `deps`: Dependency resolution and SRCINFO parsing (planned)
+//! - `deps`: Dependency resolution, parsing, and reverse dependency analysis
 //! - `index`: Package database queries (planned)
 //! - `install`: Installation command building (planned)
 //! - `news`: News feeds and security advisories (planned)
@@ -86,6 +86,46 @@
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! ## Dependency Resolution
+//!
+//! ```ignore
+//! use arch_toolkit::deps::DependencyResolver;
+//! use arch_toolkit::{PackageRef, PackageSource};
+//!
+//! let resolver = DependencyResolver::new();
+//! let packages = vec![
+//!     PackageRef {
+//!         name: "firefox".into(),
+//!         version: "121.0".into(),
+//!         source: PackageSource::Official {
+//!             repo: "extra".into(),
+//!             arch: "x86_64".into(),
+//!         },
+//!     },
+//! ];
+//!
+//! let result = resolver.resolve(&packages).unwrap();
+//! println!("Found {} dependencies", result.dependencies.len());
+//! ```
+//!
+//! ## Parse Dependency Specifications
+//!
+//! ```ignore
+//! use arch_toolkit::deps::parse_dep_spec;
+//!
+//! let spec = parse_dep_spec("python>=3.12");
+//! println!("Package: {}, Version: {}", spec.name, spec.version_req);
+//! ```
+//!
+//! ## Query Installed Packages
+//!
+//! ```ignore
+//! use arch_toolkit::deps::get_installed_packages;
+//!
+//! let installed = get_installed_packages().unwrap();
+//! println!("Found {} installed packages", installed.len());
+//! ```
 
 pub mod error;
 pub mod types;
@@ -137,6 +177,12 @@ pub use types::{HealthStatus, ServiceStatus};
 pub use types::{
     Dependency, DependencySource, DependencySpec, DependencyStatus, PackageRef, PackageSource,
     ReverseDependencySummary, SrcinfoData,
+};
+
+#[cfg(feature = "deps")]
+pub use deps::{
+    DependencyResolution, DependencyResolver, ResolverConfig, ReverseDependencyAnalyzer,
+    ReverseDependencyReport,
 };
 
 #[cfg(feature = "aur")]

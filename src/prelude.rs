@@ -45,6 +45,27 @@
 //! Ok(())
 //! # }
 //! ```
+//!
+//! ## Dependency Resolution
+//!
+//! ```ignore
+//! use arch_toolkit::prelude::*;
+//!
+//! let resolver = DependencyResolver::new();
+//! let packages = vec![
+//!     PackageRef {
+//!         name: "firefox".into(),
+//!         version: "121.0".into(),
+//!         source: PackageSource::Official {
+//!             repo: "extra".into(),
+//!             arch: "x86_64".into(),
+//!         },
+//!     },
+//! ];
+//!
+//! let result = resolver.resolve(&packages).unwrap();
+//! println!("Found {} dependencies", result.dependencies.len());
+//! ```
 
 // Core client types
 #[cfg(feature = "aur")]
@@ -80,3 +101,16 @@ pub use crate::client::CacheInvalidator;
 // Health types
 #[cfg(feature = "aur")]
 pub use crate::types::{HealthStatus, ServiceStatus};
+
+// Dependency types and functions
+#[cfg(feature = "deps")]
+pub use crate::types::{
+    Dependency, DependencySource, DependencySpec, DependencyStatus, PackageRef, PackageSource,
+    ReverseDependencySummary, SrcinfoData,
+};
+
+#[cfg(feature = "deps")]
+pub use crate::deps::{
+    DependencyResolution, DependencyResolver, ResolverConfig, ReverseDependencyAnalyzer,
+    ReverseDependencyReport, get_installed_packages, parse_dep_spec, version_satisfies,
+};

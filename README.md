@@ -15,12 +15,17 @@ Complete Rust toolkit for Arch Linux package management. Provides a unified API 
   - Configurable retry policies with per-operation control
   - Optional caching layer (memory and disk)
 
-- **Dependency Parsing** (`deps` feature)
+- **Dependency Management** (`deps` feature)
   - Parse dependencies from PKGBUILD files (single-line and multi-line arrays)
   - Parse dependencies from .SRCINFO files
   - Parse dependency specifications with version constraints
   - Parse pacman output for dependencies and conflicts
   - Fetch .SRCINFO from AUR (requires `aur` feature)
+  - Dependency resolution for official, AUR, and local packages
+  - Reverse dependency analysis for safe package removal
+  - Version comparison using pacman-compatible algorithm
+  - Package querying (installed, upgradable, versions)
+  - Source determination (official, AUR, local)
 
 ### Planned Features
 
@@ -188,7 +193,7 @@ let pkgbuild = client.aur().pkgbuild("yay").await?;
 println!("PKGBUILD:\n{}", pkgbuild);
 ```
 
-### Parse Dependencies
+### Dependency Parsing and Resolution
 
 Parse dependencies from PKGBUILD or .SRCINFO files:
 
@@ -202,6 +207,117 @@ let (depends, makedepends, checkdepends, optdepends) = parse_pkgbuild_deps(pkgbu
 // Parse .SRCINFO
 let srcinfo = r"depends = glibc\ndepends = python>=3.10";
 let (depends, makedepends, checkdepends, optdepends) = parse_srcinfo_deps(srcinfo);
+```
+
+### Dependency Resolution
+
+Resolve dependencies for packages:
+
+```rust
+use arch_toolkit::deps::{DependencyResolver, PackageRef, PackageSource};
+
+let resolver = DependencyResolver::new();
+let packages = vec![
+    PackageRef {
+        name: "firefox".into(),
+        version: "121.0".into(),
+        source: PackageSource::Official {
+            repo: "extra".into(),
+            arch: "x86_64".into(),
+        },
+    },
+];
+
+let result = resolver.resolve(&packages)?;
+println!("Found {} dependencies", result.dependencies.len());
+for dep in result.dependencies {
+    println!("  {}: {:?}", dep.name, dep.status);
+}
+```
+
+### Reverse Dependency Analysis
+
+Find all packages that depend on packages being removed:
+
+```rust
+use arch_toolkit::deps::{ReverseDependencyAnalyzer, PackageRef, PackageSource};
+
+let analyzer = ReverseDependencyAnalyzer::new();
+let packages = vec![
+    PackageRef {
+        name: "qt5-base".into(),
+        version: "5.15.10".into(),
+        source: PackageSource::Official {
+            repo: "extra".into(),
+            arch: "x86_64".into(),
+        },
+    },
+];
+
+let report = analyzer.analyze(&packages)?;
+println!("{} packages would be affected", report.dependents.len());
+```
+
+### Version Comparison
+
+Compare package versions:
+
+```rust
+use arch_toolkit::deps::{compare_versions, version_satisfies};
+
+// Compare versions
+use std::cmp::Ordering;
+assert_eq!(compare_versions("1.2.3", "1.2.4"), Ordering::Less);
+
+// Check if version satisfies requirement
+assert!(version_satisfies("2.0", ">=1.5"));
+assert!(!version_satisfies("1.0", ">=1.5"));
+```
+
+### Package Querying
+
+Query installed and upgradable packages:
+
+```rust
+use arch_toolkit::deps::{
+    get_installed_packages, get_upgradable_packages,
+    get_installed_version, get_available_version,
+};
+
+// Get installed packages
+let installed = get_installed_packages()?;
+println!("Found {} installed packages", installed.len());
+
+// Get upgradable packages
+let upgradable = get_upgradable_packages()?;
+println!("Found {} upgradable packages", upgradable.len());
+
+// Get installed version
+if let Ok(version) = get_installed_version("pacman") {
+    println!("Installed pacman version: {}", version);
+}
+
+// Get available version
+if let Some(version) = get_available_version("pacman") {
+    println!("Available pacman version: {}", version);
+}
+```
+
+### Source Determination
+
+Determine where a package comes from:
+
+```rust
+use arch_toolkit::deps::{determine_dependency_source, is_system_package};
+use std::collections::HashSet;
+
+let installed = get_installed_packages()?;
+let (source, is_core) = determine_dependency_source("glibc", &installed);
+println!("Source: {:?}, Is core: {}", source, is_core);
+
+if is_system_package("glibc") {
+    println!("glibc is a critical system package");
+}
 ```
 
 ### Health Checks
@@ -227,6 +343,13 @@ See the `examples/` directory for comprehensive examples:
 - `examples/health_check.rs`: Health check functionality
 - `examples/pkgbuild_example.rs`: PKGBUILD dependency parsing
 - `examples/srcinfo_example.rs`: .SRCINFO parsing and fetching
+- `examples/deps_example.rs`: Comprehensive dependency module examples
+- `examples/parse_example.rs`: Dependency specification parsing
+- `examples/query_example.rs`: Package querying examples
+- `examples/resolve_example.rs`: Dependency resolution examples
+- `examples/reverse_example.rs`: Reverse dependency analysis examples
+- `examples/source_example.rs`: Source determination examples
+- `examples/version_example.rs`: Version comparison examples
 
 Run examples with:
 
@@ -237,6 +360,13 @@ cargo run --example env_config
 cargo run --example health_check
 cargo run --example pkgbuild_example --features deps
 cargo run --example srcinfo_example --features deps
+cargo run --example deps_example --features deps
+cargo run --example parse_example --features deps
+cargo run --example query_example --features deps
+cargo run --example resolve_example --features deps
+cargo run --example reverse_example --features deps
+cargo run --example source_example --features deps
+cargo run --example version_example --features deps
 ```
 
 ## API Documentation

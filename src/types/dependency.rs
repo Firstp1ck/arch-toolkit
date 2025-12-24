@@ -283,6 +283,18 @@ impl std::fmt::Display for DependencySpec {
     }
 }
 
+/// Reverse dependency analysis result.
+///
+/// Contains the list of packages that depend on the target packages, along with
+/// summary statistics for each target package.
+#[derive(Clone, Debug, Default)]
+pub struct ReverseDependencyReport {
+    /// Packages that depend on the target packages.
+    pub dependents: Vec<Dependency>,
+    /// Per-package summary statistics.
+    pub summaries: Vec<ReverseDependencySummary>,
+}
+
 /// Summary statistics for a single package's reverse dependencies.
 ///
 /// Used in reverse dependency analysis to summarize how many packages depend
@@ -327,6 +339,57 @@ pub struct SrcinfoData {
     pub provides: Vec<String>,
     /// Packages this package replaces.
     pub replaces: Vec<String>,
+}
+
+/// Result of dependency resolution operation.
+///
+/// Contains all resolved dependencies along with any conflicts or missing packages
+/// discovered during the resolution process.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct DependencyResolution {
+    /// Resolved dependencies with status.
+    pub dependencies: Vec<Dependency>,
+    /// Packages that have conflicts.
+    pub conflicts: Vec<String>,
+    /// Packages that are missing.
+    pub missing: Vec<String>,
+}
+
+/// Configuration for dependency resolution.
+///
+/// Controls various aspects of how dependencies are resolved, including which
+/// types of dependencies to include and how deep to traverse the dependency tree.
+///
+/// Note: This struct does not implement `Clone` or `Debug` because it contains
+/// a function pointer (`pkgbuild_cache`) that cannot be cloned or debugged.
+#[allow(clippy::struct_excessive_bools, clippy::type_complexity)]
+pub struct ResolverConfig {
+    /// Whether to include optional dependencies.
+    pub include_optdepends: bool,
+    /// Whether to include make dependencies.
+    pub include_makedepends: bool,
+    /// Whether to include check dependencies.
+    pub include_checkdepends: bool,
+    /// Maximum depth for transitive dependency resolution (0 = direct only).
+    pub max_depth: usize,
+    /// Custom callback for fetching PKGBUILD from cache (optional).
+    pub pkgbuild_cache: Option<Box<dyn Fn(&str) -> Option<String> + Send + Sync>>,
+    /// Whether to check AUR for missing dependencies.
+    pub check_aur: bool,
+}
+
+#[allow(clippy::derivable_impls)]
+impl Default for ResolverConfig {
+    fn default() -> Self {
+        Self {
+            include_optdepends: false,
+            include_makedepends: false,
+            include_checkdepends: false,
+            max_depth: 0, // Direct dependencies only
+            pkgbuild_cache: None,
+            check_aur: false,
+        }
+    }
 }
 
 #[cfg(test)]

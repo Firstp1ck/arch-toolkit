@@ -22,10 +22,10 @@ This document analyzes framework-agnostic modules in Pacsea (`src/sources/`, `sr
   - ✅ Input validation and prelude module (v0.1.1)
   - ✅ Rich error context and trait-based design (v0.1.1)
 
-**Phase 2 - Dependencies Module: 🚧 IN PROGRESS**
+**Phase 2 - Dependencies Module: ✅ COMPLETE**
 
 - **Version**: v0.1.2 (published 2025-12-22)
-- **Status**: Partially complete - parsing functions implemented, resolution pending
+- **Status**: Complete - all core functionality implemented, module entry point complete, testing and documentation complete (Tasks 2.1.1 through 2.6.3)
 - **Completed Features**:
   - ✅ Dependency type system (`Dependency`, `DependencySpec`, `DependencyStatus`, etc.)
   - ✅ Dependency spec parsing (`parse_dep_spec`)
@@ -33,13 +33,19 @@ This document analyzes framework-agnostic modules in Pacsea (`src/sources/`, `sr
   - ✅ .SRCINFO parsing (`parse_srcinfo`, `parse_srcinfo_deps`, `parse_srcinfo_conflicts`)
   - ✅ .SRCINFO fetching from AUR (`fetch_srcinfo` - requires `aur` feature)
   - ✅ PKGBUILD parsing (`parse_pkgbuild_deps`, `parse_pkgbuild_conflicts`)
+  - ✅ Version comparison utilities (`compare_versions`, `version_satisfies`, `is_major_version_bump`, `extract_major_component`)
+  - ✅ Package querying (`get_installed_packages`, `get_upgradable_packages`, `get_installed_version`, `get_available_version`, `is_package_installed_or_provided`)
+  - ✅ Source determination (`determine_dependency_source`, `is_system_package`)
+  - ✅ Dependency resolution (`DependencyResolver`, `determine_status`, `batch_fetch_official_deps`, `fetch_package_conflicts`)
+  - ✅ Reverse dependency analysis (`ReverseDependencyAnalyzer`, `has_installed_required_by`, `get_installed_required_by`)
   - ✅ Comprehensive examples and documentation
-- **Remaining Work**:
-  - ⏳ Version comparison utilities
-  - ⏳ Package querying (installed, upgradable)
-  - ⏳ Dependency resolution (tree building)
-  - ⏳ Reverse dependency analysis
-  - ⏳ AUR dependency queries
+- **Completed Work**:
+  - ✅ All core functionality implemented
+  - ✅ Module entry point complete (Task 2.5.1)
+  - ✅ Integration tests created (Task 2.6.2)
+  - ✅ Documentation complete (Task 2.6.3)
+  - ✅ Comprehensive examples created (Task 2.6.3)
+  - ⏳ AUR dependency queries (async .SRCINFO fetching limitation noted - future enhancement)
   - **Detailed Plan**: [DEPENDENCIES_MODULE_PHASE.md](./DEPENDENCIES_MODULE_PHASE.md)
 
 **Phase 3+ - Remaining Modules: ⏳ PLANNED**
@@ -247,17 +253,81 @@ The dependencies module is partially complete in v0.1.2:
    - `Dependency`, `DependencySpec`, `DependencyStatus`, `DependencySource`, etc.
    - Helper methods and Display implementations
 
-3. **Examples & Documentation** ✅
+3. **Version Comparison Utilities** ✅
+   - Version comparison (`compare_versions`) with pacman-compatible algorithm
+   - Version requirement checking (`version_satisfies`) with proper comparison (improved from Pacsea)
+   - Major version bump detection (`is_major_version_bump`)
+   - Major component extraction (`extract_major_component`)
+   - Pkgrel suffix normalization
+   - Comprehensive unit tests (18 tests)
+
+4. **Package Querying** ✅
+   - Installed packages query (`get_installed_packages`) using `pacman -Qq`
+   - Upgradable packages query (`get_upgradable_packages`) using `pacman -Qu`
+   - Installed version query (`get_installed_version`) using `pacman -Q`
+   - Available version query (`get_available_version`) using `pacman -Si`
+   - Provided packages check (`is_package_installed_or_provided`) with lazy checking
+   - Graceful degradation when pacman is unavailable
+   - Generic over `BuildHasher` for flexibility
+   - Comprehensive unit tests (10 tests: 6 parsing logic, 4 integration)
+
+5. **Source Determination** ✅
+   - Source determination (`determine_dependency_source`) for installed and uninstalled packages
+   - Critical system package detection (`is_system_package`)
+   - Handles official repositories, AUR, and local packages
+   - Uses `pacman -Qi` for installed packages and `pacman -Si` for uninstalled packages
+   - Graceful degradation when pacman is unavailable
+   - Generic over `BuildHasher` for flexibility
+   - Comprehensive unit tests (8 tests)
+
+6. **Dependency Resolution** ✅
+   - Dependency resolver (`DependencyResolver`) with `new()`, `with_config()`, and `resolve()` methods
+   - Status determination (`determine_status`) for dependency status checking
+   - Batch fetching (`batch_fetch_official_deps`) for efficient pacman queries
+   - Single package resolution (`resolve_package_deps`) for official, local, and AUR packages
+   - Conflict detection (`fetch_package_conflicts`) for package conflicts
+   - Dependency merging with status priority handling
+   - PKGBUILD cache callback support via `ResolverConfig`
+   - AUR integration (feature-gated, with limitations for async .SRCINFO fetching)
+   - Comprehensive unit tests (7 tests)
+   - Added `DependencyResolution` and `ResolverConfig` types
+
+7. **Reverse Dependency Analysis** ✅
+   - Reverse dependency analyzer (`ReverseDependencyAnalyzer`) with `new()` and `analyze()` methods
+   - BFS traversal using `pacman -Qi` queries to find all packages that depend on removal targets
+   - Per-root relationship tracking to distinguish direct vs transitive dependents
+   - Package information caching to avoid redundant pacman calls
+   - Conflict status generation with detailed reason strings
+   - Source determination (official, AUR, local) based on repository information
+   - System/core package detection based on groups and repository
+   - Helper functions: `has_installed_required_by()`, `get_installed_required_by()`
+   - Comprehensive unit tests (5 tests)
+   - Added `ReverseDependencyReport` type
+
+8. **Examples & Documentation** ✅
    - `examples/pkgbuild_example.rs` - 16 usage examples
    - `examples/srcinfo_example.rs` - Comprehensive .SRCINFO examples
    - Comprehensive unit tests
 
-**Remaining work for Phase 2:**
-- ⏳ Version comparison utilities
-- ⏳ Package querying (installed, upgradable)
-- ⏳ Dependency resolution (tree building)
-- ⏳ Reverse dependency analysis
-- ⏳ AUR dependency queries
+9. **Module Entry Point** ✅ (Task 2.5.1)
+   - Enhanced `src/deps/mod.rs` with comprehensive module-level documentation
+   - Added usage examples for all major functionality
+   - Documented feature flag requirements
+   - Updated `src/lib.rs` to reflect deps module is complete
+   - Added deps exports to `src/prelude.rs` for convenience
+   - All types and functions properly exported
+
+10. **Testing and Documentation** ✅ (Task 2.6.1, 2.6.2, 2.6.3)
+   - Comprehensive unit tests verified for all modules
+   - Integration tests created in `tests/deps_integration.rs`
+   - Rustdoc examples added to all public APIs
+   - README updated with comprehensive deps module documentation
+   - Comprehensive example program `examples/deps_example.rs` created
+
+**Phase 2 Status: ✅ COMPLETE**
+- All planned tasks (2.1.1 through 2.6.3) are complete
+- Module is ready for production use
+- Future enhancement: AUR dependency queries (async .SRCINFO fetching limitation noted)
 
 **Detailed Plan**: [DEPENDENCIES_MODULE_PHASE.md](./DEPENDENCIES_MODULE_PHASE.md)
 
@@ -558,9 +628,42 @@ arch-toolkit/
   - ✅ Implemented: `parse_pkgbuild_deps()`, `parse_pkgbuild_conflicts()` in `src/deps/pkgbuild.rs`
 - [x] **Define dependency types** - Create standalone types
   - ✅ Implemented: Comprehensive type system in `src/types/dependency.rs` (9 types, 580 lines)
-- [ ] **Port version comparison utilities** - From `src/logic/deps/utils.rs`
-- [ ] **Port dependency resolution** - From `src/logic/deps/resolve.rs`
-- [ ] **Port reverse deps** - From `src/logic/deps/reverse.rs`
+- [x] **Port version comparison utilities** - From `src/logic/deps/utils.rs` and `src/logic/preflight/version.rs`
+  - ✅ Implemented: `compare_versions()`, `version_satisfies()`, `is_major_version_bump()`, `extract_major_component()` in `src/deps/version.rs`
+  - ✅ Improved `version_satisfies()` to use proper version comparison instead of string comparison
+  - ✅ Comprehensive unit tests (18 tests)
+- [x] **Port package querying** - From `src/logic/deps/query.rs` and `src/logic/deps/status.rs`
+  - ✅ Implemented: `get_installed_packages()`, `get_upgradable_packages()`, `get_provided_packages()`, `is_package_installed_or_provided()`, `get_installed_version()`, `get_available_version()` in `src/deps/query.rs`
+  - ✅ Graceful degradation when pacman is unavailable
+  - ✅ Generic over `BuildHasher` for flexibility
+  - ✅ Comprehensive unit tests (10 tests)
+- [x] **Port source determination** - From `src/logic/deps/source.rs`
+  - ✅ Implemented: `determine_dependency_source()`, `is_system_package()` in `src/deps/source.rs`
+  - ✅ Handles official repositories, AUR, and local packages
+  - ✅ Uses `pacman -Qi` for installed packages and `pacman -Si` for uninstalled packages
+  - ✅ Graceful degradation when pacman is unavailable
+  - ✅ Generic over `BuildHasher` for flexibility
+  - ✅ Comprehensive unit tests (8 tests)
+- [x] **Port dependency resolution** - From `src/logic/deps/resolve.rs`
+  - ✅ Implemented: `DependencyResolver` struct with `new()`, `with_config()`, and `resolve()` methods in `src/deps/resolve.rs`
+  - ✅ Ported `determine_status()`, `batch_fetch_official_deps()`, `resolve_package_deps()`, `fetch_package_conflicts()`
+  - ✅ Handles official, local, and AUR package resolution
+  - ✅ Conflict detection and processing
+  - ✅ Dependency merging with status priority
+  - ✅ PKGBUILD cache callback support via `ResolverConfig`
+  - ✅ AUR integration (feature-gated, with limitations for async .SRCINFO fetching)
+  - ✅ Added `DependencyResolution` and `ResolverConfig` types
+  - ✅ Comprehensive unit tests (7 tests)
+- [x] **Port reverse deps** - From `src/logic/deps/reverse.rs`
+  - ✅ Implemented: `ReverseDependencyAnalyzer` struct with `new()` and `analyze()` methods in `src/deps/reverse.rs`
+  - ✅ Ported BFS traversal logic using `pacman -Qi` queries
+  - ✅ Ported `fetch_pkg_info()`, `parse_key_value_output()`, `split_ws_or_none()`, `convert_entry()`
+  - ✅ Implemented `has_installed_required_by()` and `get_installed_required_by()` helper functions
+  - ✅ Handles direct vs transitive dependents with depth tracking
+  - ✅ Conflict status generation with detailed reason strings
+  - ✅ Source determination and system/core package detection
+  - ✅ Added `ReverseDependencyReport` type
+  - ✅ Comprehensive unit tests (5 tests)
 - [ ] **Port AUR dependency queries** - From `src/logic/deps/aur.rs`
 
 #### Index Module (`feature = "index"`)
@@ -855,7 +958,7 @@ The AUR module has been successfully extracted from Pacsea and published as `arc
 
 The Dependencies Module is partially complete in v0.1.2:
 
-1. **Dependencies Module** - ✅ Parsing functions complete (SRCINFO, PKGBUILD, dependency specs), ⏳ Resolution and reverse deps pending
+1. **Dependencies Module** - ✅ Parsing functions complete (SRCINFO, PKGBUILD, dependency specs), ✅ Version comparison utilities complete, ✅ Package querying complete, ✅ Source determination complete, ✅ Dependency resolution complete, ✅ Reverse dependency analysis complete, ✅ Module entry point complete (Task 2.5.1)
 2. **Index Module** - ⏳ Installed package queries, official repo queries, mirror management
 3. **Install Module** - ⏳ Pacman command building, AUR helper detection, batch operations
 4. **News Module** - ⏳ Arch news RSS, security advisories
@@ -876,9 +979,9 @@ These modules may still have blockers similar to what the AUR module had:
 2. **Phase 2**: Add dependencies module (~30-40 hours) 🚧 **IN PROGRESS**
    - High reuse value
    - Complements AUR module
-   - **Status**: Parsing functions complete (v0.1.2), resolution pending
-   - **Completed**: Dependency types, parsing (specs, SRCINFO, PKGBUILD, pacman output)
-   - **Remaining**: Version utils, querying, resolution, reverse deps
+   - **Status**: Parsing functions, version utilities, package querying, source determination, dependency resolution, reverse dependency analysis, and module entry point complete (v0.1.2)
+   - **Completed**: Dependency types, parsing (specs, SRCINFO, PKGBUILD, pacman output), version comparison utilities, package querying, source determination, dependency resolution, reverse dependency analysis, module entry point (Task 2.5.1)
+   - **Remaining**: AUR dependency queries (async .SRCINFO fetching limitation noted)
    - **Plan Document**: [DEPENDENCIES_MODULE_PHASE.md](./DEPENDENCIES_MODULE_PHASE.md)
 
 3. **Phase 3**: Add remaining modules incrementally ⏳ **PLANNED**
