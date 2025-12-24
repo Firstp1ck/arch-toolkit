@@ -2,7 +2,7 @@
 //!
 //! This example demonstrates:
 //! - Resolving dependencies for packages from official repos, AUR, or local
-//! - Configuring dependency resolution with ResolverConfig
+//! - Configuring dependency resolution with `ResolverConfig`
 //! - Determining dependency status (installed, to install, to upgrade, conflict, missing)
 //! - Batch fetching dependencies for multiple packages
 //! - Fetching package conflicts
@@ -206,7 +206,7 @@ fn main() -> arch_toolkit::error::Result<()> {
         if let Some(deps) = batch_deps.get(*pkg_name) {
             println!("    {}: {} dependencies", pkg_name, deps.len());
             if !deps.is_empty() {
-                let sample: Vec<&str> = deps.iter().map(|s| s.as_str()).take(3).collect();
+                let sample: Vec<&str> = deps.iter().map(String::as_str).take(3).collect();
                 println!("      Sample: {}", sample.join(", "));
                 if deps.len() > 3 {
                     println!("      ... and {} more", deps.len() - 3);
@@ -376,22 +376,22 @@ fn main() -> arch_toolkit::error::Result<()> {
 
     match resolver.resolve(&packages) {
         Ok(result) => {
-            if !result.missing.is_empty() {
+            if result.missing.is_empty() {
+                println!("  No missing dependencies (all dependencies found)");
+            } else {
                 println!("  Missing dependencies found:");
                 for missing in &result.missing {
                     println!("    • {}", missing);
                 }
-            } else {
-                println!("  No missing dependencies (all dependencies found)");
             }
 
-            if !result.conflicts.is_empty() {
+            if result.conflicts.is_empty() {
+                println!("\n  No conflicts found");
+            } else {
                 println!("\n  Conflicts found:");
                 for conflict in &result.conflicts {
                     println!("    • {}", conflict);
                 }
-            } else {
-                println!("\n  No conflicts found");
             }
         }
         Err(e) => println!("  Error: {}", e),

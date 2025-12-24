@@ -5,6 +5,194 @@ All notable changes to arch-toolkit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2025-12-24
+
+# Release v0.2.0 - Complete Dependency Management
+
+**Release Date**: 2025-01-XX
+
+## 🚀 What's New
+
+This release completes the dependency management module with full resolution, querying, version comparison, and reverse dependency analysis capabilities. The `deps` feature is now production-ready for comprehensive Arch Linux package dependency management.
+
+### ✨ New Features
+
+**Dependency Resolution**
+- Resolve dependencies for official, AUR, and local packages
+- Configurable resolution (include optional, make, check dependencies)
+- Batch dependency fetching for efficient queries
+- Conflict detection and status determination
+- Support for PKGBUILD cache callbacks
+
+**Reverse Dependency Analysis**
+- Find all packages that depend on packages being removed
+- Distinguish direct vs transitive dependents
+- Generate conflict status with detailed reasons
+- Helper functions for quick dependency checks
+
+**Version Comparison**
+- Pacman-compatible version comparison algorithm
+- Version requirement satisfaction checking
+- Major version bump detection
+- Extract major version components
+
+**Package Querying**
+- Query installed packages
+- Query upgradable packages
+- Get installed and available package versions
+- Check if packages are installed or provided
+- Graceful degradation when pacman is unavailable
+
+**Source Determination**
+- Determine package source (official, AUR, local)
+- Identify core repository packages
+- Detect critical system packages
+
+### 📚 Examples
+
+Seven comprehensive example files demonstrate all new functionality:
+- `examples/deps_example.rs` - Complete dependency module overview
+- `examples/parse_example.rs` - Dependency specification parsing
+- `examples/query_example.rs` - Package querying examples
+- `examples/resolve_example.rs` - Dependency resolution examples
+- `examples/reverse_example.rs` - Reverse dependency analysis examples
+- `examples/source_example.rs` - Source determination examples
+- `examples/version_example.rs` - Version comparison examples
+
+## Quick Start
+
+### Dependency Resolution
+
+```rust
+use arch_toolkit::deps::DependencyResolver;
+use arch_toolkit::{PackageRef, PackageSource};
+
+let resolver = DependencyResolver::new();
+let packages = vec![
+    PackageRef {
+        name: "firefox".into(),
+        version: "121.0".into(),
+        source: PackageSource::Official {
+            repo: "extra".into(),
+            arch: "x86_64".into(),
+        },
+    },
+];
+
+let result = resolver.resolve(&packages)?;
+println!("Found {} dependencies", result.dependencies.len());
+```
+
+### Reverse Dependency Analysis
+
+```rust
+use arch_toolkit::deps::ReverseDependencyAnalyzer;
+
+let analyzer = ReverseDependencyAnalyzer::new();
+let packages = vec![
+    PackageRef {
+        name: "wget".into(),
+        version: "1.21.4".into(),
+        source: PackageSource::Official {
+            repo: "core".into(),
+            arch: "x86_64".into(),
+        },
+    },
+];
+
+let report = analyzer.analyze(&packages)?;
+println!("{} packages would be affected", report.dependents.len());
+```
+
+### Version Comparison
+
+```rust
+use arch_toolkit::deps::{compare_versions, version_satisfies};
+use std::cmp::Ordering;
+
+assert_eq!(compare_versions("1.2.3", "1.2.4"), Ordering::Less);
+assert!(version_satisfies("2.0", ">=1.5"));
+```
+
+### Package Querying
+
+```rust
+use arch_toolkit::deps::{
+    get_installed_packages, get_upgradable_packages,
+    get_installed_version, get_available_version,
+};
+
+let installed = get_installed_packages()?;
+println!("Found {} installed packages", installed.len());
+
+if let Ok(version) = get_installed_version("pacman") {
+    println!("Installed version: {}", version);
+}
+```
+
+### Source Determination
+
+```rust
+use arch_toolkit::deps::{determine_dependency_source, is_system_package};
+
+let installed = get_installed_packages()?;
+let (source, is_core) = determine_dependency_source("bash", &installed);
+println!("Source: {:?}, Is core: {}", source, is_core);
+
+if is_system_package("bash") {
+    println!("Critical system package");
+}
+```
+
+## Installation
+
+```bash
+cargo add arch-toolkit@0.2.0 --features deps
+```
+
+Or update your `Cargo.toml`:
+
+```toml
+[dependencies]
+arch-toolkit = { version = "0.2.0", features = ["deps"] }
+```
+
+For AUR integration:
+
+```toml
+[dependencies]
+arch-toolkit = { version = "0.2.0", features = ["deps", "aur"] }
+```
+
+## Migration from v0.1.2
+
+No breaking changes! This is a backward-compatible release. All existing code will continue to work.
+
+**New capabilities:**
+- Use `DependencyResolver` to resolve dependencies for packages
+- Use `ReverseDependencyAnalyzer` to analyze reverse dependencies
+- Use version comparison functions for package version checks
+- Query installed and upgradable packages
+- Determine package sources and system package status
+- Check out the comprehensive example files for usage patterns
+
+## Documentation
+
+- [Full API Documentation](https://docs.rs/arch-toolkit/0.2.0)
+- [GitHub Repository](https://github.com/Firstp1ck/arch-toolkit)
+- [Examples](https://github.com/Firstp1ck/arch-toolkit/tree/main/examples)
+
+## Feedback
+
+Found a bug or have a feature request? Open an issue on [GitHub](https://github.com/Firstp1ck/arch-toolkit/issues)!
+
+---
+
+**Full Changelog**: See [CHANGELOG.md](../CHANGELOG.md) for detailed technical changes.
+
+
+---
+
 ## [0.1.2] - 2025-12-22
 
 # Release v0.1.2 - Dependency Parsing

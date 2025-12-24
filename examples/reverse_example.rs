@@ -23,8 +23,7 @@ fn main() {
     clippy::cognitive_complexity,
     clippy::unnecessary_wraps,
     clippy::uninlined_format_args,
-    clippy::redundant_closure_for_method_calls,
-    clippy::needless_not
+    clippy::redundant_closure_for_method_calls
 )] // Example file - comprehensive demonstration
 fn main() -> arch_toolkit::error::Result<()> {
     use arch_toolkit::deps::get_installed_packages;
@@ -162,7 +161,9 @@ fn main() -> arch_toolkit::error::Result<()> {
                 match analyzer.analyze(&packages) {
                     Ok(report) => {
                         println!("  ✓ Analysis complete!");
-                        if !report.summaries.is_empty() {
+                        if report.summaries.is_empty() {
+                            println!("  No summary statistics available");
+                        } else {
                             println!("  Summary statistics for removal targets:");
                             for summary in report.summaries.iter().take(5) {
                                 println!("\n    Package: {}", summary.package);
@@ -173,8 +174,6 @@ fn main() -> arch_toolkit::error::Result<()> {
                                 );
                                 println!("      Total dependents: {}", summary.total_dependents);
                             }
-                        } else {
-                            println!("  No summary statistics available");
                         }
                     }
                     Err(e) => println!("  Error: {}", e),
@@ -317,7 +316,9 @@ fn main() -> arch_toolkit::error::Result<()> {
                 }
             }
 
-            if !packages_to_analyze.is_empty() {
+            if packages_to_analyze.is_empty() {
+                println!("  No suitable packages found (< 100 dependents each)");
+            } else {
                 println!("  Analyzing {} packages...", packages_to_analyze.len());
                 match analyzer.analyze(&packages_to_analyze) {
                     Ok(report) => {
@@ -337,8 +338,6 @@ fn main() -> arch_toolkit::error::Result<()> {
                     }
                     Err(e) => println!("  Error: {}", e),
                 }
-            } else {
-                println!("  No suitable packages found (< 100 dependents each)");
             }
         }
         Err(_) => println!("  Skipping (error getting installed packages)"),

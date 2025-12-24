@@ -19,7 +19,7 @@ fn main() {
 
 #[cfg(feature = "deps")]
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)] // Example file - comprehensive demonstration
-fn main() -> arch_toolkit::error::Result<()> {
+fn main() {
     use arch_toolkit::deps::{
         get_available_version, get_installed_packages, get_installed_version,
         get_provided_packages, get_upgradable_packages, is_package_installed_or_provided,
@@ -39,7 +39,9 @@ fn main() -> arch_toolkit::error::Result<()> {
     match get_installed_packages() {
         Ok(installed) => {
             println!("Found {} installed packages", installed.len());
-            if !installed.is_empty() {
+            if installed.is_empty() {
+                println!("No packages found (pacman may not be available)");
+            } else {
                 println!("\nSample packages (first 10):");
                 for (i, pkg) in installed.iter().take(10).enumerate() {
                     println!("  {}. {}", i + 1, pkg);
@@ -53,17 +55,15 @@ fn main() -> arch_toolkit::error::Result<()> {
                 println!("\nChecking for common packages:");
                 for pkg in &common_packages {
                     if installed.contains(*pkg) {
-                        println!("  ✓ {} is installed", pkg);
+                        println!("  ✓ {pkg} is installed");
                     } else {
-                        println!("  ✗ {} is not installed", pkg);
+                        println!("  ✗ {pkg} is not installed");
                     }
                 }
-            } else {
-                println!("No packages found (pacman may not be available)");
             }
         }
         Err(e) => {
-            println!("Error querying installed packages: {}", e);
+            println!("Error querying installed packages: {e}");
             println!("Note: This function gracefully degrades when pacman is unavailable");
         }
     }
@@ -78,7 +78,13 @@ fn main() -> arch_toolkit::error::Result<()> {
     match get_upgradable_packages() {
         Ok(upgradable) => {
             println!("Found {} upgradable packages", upgradable.len());
-            if !upgradable.is_empty() {
+            if upgradable.is_empty() {
+                println!("No upgradable packages found");
+                println!("Note: This could mean:");
+                println!("  - System is up to date");
+                println!("  - pacman is not available");
+                println!("  - No packages need updating");
+            } else {
                 println!("\nPackages with available upgrades:");
                 for (i, pkg) in upgradable.iter().take(10).enumerate() {
                     println!("  {}. {}", i + 1, pkg);
@@ -86,16 +92,10 @@ fn main() -> arch_toolkit::error::Result<()> {
                 if upgradable.len() > 10 {
                     println!("  ... and {} more packages", upgradable.len() - 10);
                 }
-            } else {
-                println!("No upgradable packages found");
-                println!("Note: This could mean:");
-                println!("  - System is up to date");
-                println!("  - pacman is not available");
-                println!("  - No packages need updating");
             }
         }
         Err(e) => {
-            println!("Error querying upgradable packages: {}", e);
+            println!("Error querying upgradable packages: {e}");
             println!("Note: This function gracefully degrades when pacman is unavailable");
         }
     }
@@ -112,10 +112,10 @@ fn main() -> arch_toolkit::error::Result<()> {
     for pkg_name in &test_packages {
         match get_installed_version(pkg_name) {
             Ok(version) => {
-                println!("  ✓ {}: version {}", pkg_name, version);
+                println!("  ✓ {pkg_name}: version {version}");
             }
             Err(e) => {
-                println!("  ✗ {}: {}", pkg_name, e);
+                println!("  ✗ {pkg_name}: {e}");
             }
         }
     }
@@ -135,10 +135,10 @@ fn main() -> arch_toolkit::error::Result<()> {
     for pkg_name in &test_packages {
         match get_available_version(pkg_name) {
             Some(version) => {
-                println!("  ✓ {}: available version {}", pkg_name, version);
+                println!("  ✓ {pkg_name}: available version {version}");
             }
             None => {
-                println!("  ✗ {}: not found in repositories", pkg_name);
+                println!("  ✗ {pkg_name}: not found in repositories");
             }
         }
     }
@@ -162,32 +162,20 @@ fn main() -> arch_toolkit::error::Result<()> {
         match (installed_ver, available_ver) {
             (Some(installed), Some(available)) => {
                 if installed == available {
-                    println!(
-                        "  ✓ {}: up to date ({} == {})",
-                        pkg_name, installed, available
-                    );
+                    println!("  ✓ {pkg_name}: up to date ({installed} == {available})");
                 } else {
-                    println!(
-                        "  → {}: update available ({} -> {})",
-                        pkg_name, installed, available
-                    );
+                    println!("  → {pkg_name}: update available ({installed} -> {available})");
                 }
             }
             (Some(installed), None) => {
-                println!(
-                    "  ? {}: installed ({}) but not in repos",
-                    pkg_name, installed
-                );
+                println!("  ? {pkg_name}: installed ({installed}) but not in repos");
                 println!("     (may be AUR or local package)");
             }
             (None, Some(available)) => {
-                println!(
-                    "  → {}: not installed, available version {}",
-                    pkg_name, available
-                );
+                println!("  → {pkg_name}: not installed, available version {available}");
             }
             (None, None) => {
-                println!("  ✗ {}: not installed and not in repos", pkg_name);
+                println!("  ✗ {pkg_name}: not installed and not in repos");
             }
         }
     }
@@ -212,7 +200,7 @@ fn main() -> arch_toolkit::error::Result<()> {
             );
         }
         Err(e) => {
-            println!("Error: {}", e);
+            println!("Error: {e}");
         }
     }
 
@@ -240,9 +228,9 @@ fn main() -> arch_toolkit::error::Result<()> {
                 let is_available =
                     is_package_installed_or_provided(pkg_name, &installed, &provided);
                 if is_available {
-                    println!("  ✓ {}: installed or provided", pkg_name);
+                    println!("  ✓ {pkg_name}: installed or provided");
                 } else {
-                    println!("  ✗ {}: not installed or provided", pkg_name);
+                    println!("  ✗ {pkg_name}: not installed or provided");
                 }
             }
 
@@ -251,7 +239,7 @@ fn main() -> arch_toolkit::error::Result<()> {
             println!("      This is much faster than querying all packages upfront");
         }
         Err(e) => {
-            println!("Error getting installed packages: {}", e);
+            println!("Error getting installed packages: {e}");
         }
     }
 
@@ -277,16 +265,16 @@ fn main() -> arch_toolkit::error::Result<()> {
                 let available_ver = get_available_version(pkg_name);
                 let needs_update = upgradable.contains(*pkg_name);
 
-                println!("\n  Package: {}", pkg_name);
+                println!("\n  Package: {pkg_name}");
                 println!(
                     "    Installed: {}",
                     if is_installed { "✓ Yes" } else { "✗ No" }
                 );
                 if let Some(ver) = installed_ver {
-                    println!("    Installed Version: {}", ver);
+                    println!("    Installed Version: {ver}");
                 }
                 if let Some(ver) = available_ver {
-                    println!("    Available Version: {}", ver);
+                    println!("    Available Version: {ver}");
                 }
                 if needs_update {
                     println!("    Status: → Update available");
@@ -296,7 +284,7 @@ fn main() -> arch_toolkit::error::Result<()> {
             }
         }
         Err(e) => {
-            println!("Error: {}", e);
+            println!("Error: {e}");
         }
     }
 
@@ -341,5 +329,4 @@ fn main() -> arch_toolkit::error::Result<()> {
     println!("\n╔═══════════════════════════════════════════════════════════════╗");
     println!("║                    Example Complete                            ║");
     println!("╚═══════════════════════════════════════════════════════════════╝");
-    Ok(())
 }

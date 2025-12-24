@@ -17,7 +17,7 @@ fn main() {
 
 #[cfg(feature = "deps")]
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)] // Example file - comprehensive demonstration
-fn main() -> arch_toolkit::error::Result<()> {
+fn main() {
     use arch_toolkit::deps::get_installed_packages;
     use arch_toolkit::deps::{determine_dependency_source, is_system_package};
 
@@ -40,12 +40,12 @@ fn main() -> arch_toolkit::error::Result<()> {
             for pkg_name in &test_packages {
                 if installed.contains(*pkg_name) {
                     let (source, is_core) = determine_dependency_source(pkg_name, &installed);
-                    println!("\n  Package: {}", pkg_name);
-                    println!("    Source: {:?}", source);
-                    println!("    Is Core Repository: {}", is_core);
+                    println!("\n  Package: {pkg_name}");
+                    println!("    Source: {source:?}");
+                    println!("    Is Core Repository: {is_core}");
                     match source {
                         arch_toolkit::types::dependency::DependencySource::Official { repo } => {
-                            println!("    Repository: {}", repo);
+                            println!("    Repository: {repo}");
                         }
                         arch_toolkit::types::dependency::DependencySource::Aur => {
                             println!("    Repository: AUR");
@@ -55,12 +55,12 @@ fn main() -> arch_toolkit::error::Result<()> {
                         }
                     }
                 } else {
-                    println!("\n  Package: {} (not installed)", pkg_name);
+                    println!("\n  Package: {pkg_name} (not installed)");
                 }
             }
         }
         Err(e) => {
-            println!("Error getting installed packages: {}", e);
+            println!("Error getting installed packages: {e}");
         }
     }
 
@@ -81,14 +81,16 @@ fn main() -> arch_toolkit::error::Result<()> {
 
             println!("Checking source for uninstalled packages:");
             for pkg_name in &test_packages {
-                if !installed.contains(*pkg_name) {
+                if installed.contains(*pkg_name) {
+                    println!("\n  Package: {pkg_name} (already installed)");
+                } else {
                     let (source, is_core) = determine_dependency_source(pkg_name, &installed);
-                    println!("\n  Package: {}", pkg_name);
-                    println!("    Source: {:?}", source);
-                    println!("    Is Core Repository: {}", is_core);
+                    println!("\n  Package: {pkg_name}");
+                    println!("    Source: {source:?}");
+                    println!("    Is Core Repository: {is_core}");
                     match source {
                         arch_toolkit::types::dependency::DependencySource::Official { repo } => {
-                            println!("    Repository: {} (found in official repos)", repo);
+                            println!("    Repository: {repo} (found in official repos)");
                         }
                         arch_toolkit::types::dependency::DependencySource::Aur => {
                             println!("    Repository: AUR (or not found in official repos)");
@@ -98,13 +100,11 @@ fn main() -> arch_toolkit::error::Result<()> {
                             println!("    Repository: Local (not in repos)");
                         }
                     }
-                } else {
-                    println!("\n  Package: {} (already installed)", pkg_name);
                 }
             }
         }
         Err(e) => {
-            println!("Error getting installed packages: {}", e);
+            println!("Error getting installed packages: {e}");
         }
     }
 
@@ -123,8 +123,8 @@ fn main() -> arch_toolkit::error::Result<()> {
             for pkg_name in &core_packages {
                 if installed.contains(*pkg_name) {
                     let (_source, is_core) = determine_dependency_source(pkg_name, &installed);
-                    println!("\n  Package: {}", pkg_name);
-                    println!("    Is Core: {}", is_core);
+                    println!("\n  Package: {pkg_name}");
+                    println!("    Is Core: {is_core}");
                     if is_core {
                         println!("    ✓ This is a core repository package");
                     } else {
@@ -134,7 +134,7 @@ fn main() -> arch_toolkit::error::Result<()> {
             }
         }
         Err(e) => {
-            println!("Error: {}", e);
+            println!("Error: {e}");
         }
     }
 
@@ -157,7 +157,7 @@ fn main() -> arch_toolkit::error::Result<()> {
     println!("Checking if packages are critical system packages:");
     for pkg_name in &test_packages {
         let is_system = is_system_package(pkg_name);
-        println!("\n  Package: {}", pkg_name);
+        println!("\n  Package: {pkg_name}");
         if is_system {
             println!("    ✓ Critical system package");
             println!("    Warning: Removing this package may break the system!");
@@ -194,7 +194,7 @@ fn main() -> arch_toolkit::error::Result<()> {
                     arch_toolkit::types::dependency::DependencySource::Local => {
                         local_count += 1;
                         if local_count <= 3 {
-                            println!("  - {}: Local package", pkg_name);
+                            println!("  - {pkg_name}: Local package");
                         }
                     }
                     arch_toolkit::types::dependency::DependencySource::Official { .. } => {
@@ -207,13 +207,13 @@ fn main() -> arch_toolkit::error::Result<()> {
             }
 
             println!("\nSample statistics (first 20 packages):");
-            println!("  Official repository: {} packages", official_count);
-            println!("  AUR: {} packages", aur_count);
-            println!("  Local: {} packages", local_count);
+            println!("  Official repository: {official_count} packages");
+            println!("  AUR: {aur_count} packages");
+            println!("  Local: {local_count} packages");
             println!("\nNote: This is a sample - check all packages for full statistics");
         }
         Err(e) => {
-            println!("Error: {}", e);
+            println!("Error: {e}");
         }
     }
 
@@ -232,10 +232,10 @@ fn main() -> arch_toolkit::error::Result<()> {
             for pkg_name in &test_packages {
                 if installed.contains(*pkg_name) {
                     let (source, is_core) = determine_dependency_source(pkg_name, &installed);
-                    println!("\n  Package: {}", pkg_name);
+                    println!("\n  Package: {pkg_name}");
                     match source {
                         arch_toolkit::types::dependency::DependencySource::Official { repo } => {
-                            println!("    Repository: {}", repo);
+                            println!("    Repository: {repo}");
                             if is_core {
                                 println!("    Type: Core repository (essential system packages)");
                             } else {
@@ -253,7 +253,7 @@ fn main() -> arch_toolkit::error::Result<()> {
             }
         }
         Err(e) => {
-            println!("Error: {}", e);
+            println!("Error: {e}");
         }
     }
 
@@ -302,14 +302,14 @@ fn main() -> arch_toolkit::error::Result<()> {
 
             println!("\nSummary:");
             println!("  Total packages analyzed: {}", packages_to_analyze.len());
-            println!("  Core repository: {}", core_count);
-            println!("  Official repositories: {}", official_count);
-            println!("  AUR: {}", aur_count);
-            println!("  Local: {}", local_count);
-            println!("  Critical system packages: {}", system_count);
+            println!("  Core repository: {core_count}");
+            println!("  Official repositories: {official_count}");
+            println!("  AUR: {aur_count}");
+            println!("  Local: {local_count}");
+            println!("  Critical system packages: {system_count}");
         }
         Err(e) => {
-            println!("Error: {}", e);
+            println!("Error: {e}");
         }
     }
 
@@ -384,5 +384,4 @@ fn main() -> arch_toolkit::error::Result<()> {
     println!("\n╔═══════════════════════════════════════════════════════════════╗");
     println!("║                    Example Complete                            ║");
     println!("╚═══════════════════════════════════════════════════════════════╝");
-    Ok(())
 }
