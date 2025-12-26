@@ -48,9 +48,16 @@ This document analyzes framework-agnostic modules in Pacsea (`src/sources/`, `sr
   - ⏳ AUR dependency queries (async .SRCINFO fetching limitation noted - future enhancement)
   - **Detailed Plan**: [DEPENDENCIES_MODULE_PHASE.md](./DEPENDENCIES_MODULE_PHASE.md)
 
-**Phase 3+ - Remaining Modules: ⏳ PLANNED**
+**Phase 3 - Index Module: ⏳ PLANNED**
 
 - Index module (package database queries)
+  - Installed package queries
+  - Official repository queries
+  - Mirror management
+  - Index persistence
+
+**Phase 4+ - Remaining Modules: ⏳ PLANNED**
+
 - Install module (command building)
 - News module (RSS feeds, advisories)
 - Sandbox module (PKGBUILD security analysis)
@@ -333,6 +340,14 @@ The dependencies module is partially complete in v0.1.2:
 
 ### ⏳ Remaining Work (Future Phases)
 
+**Phase 3 - Index Module** (Next Priority)
+- Installed package queries
+- Official repository queries
+- Mirror management
+- Index persistence
+- **Detailed Plan**: [INDEX_MODULE_PHASE.md](./INDEX_MODULE_PHASE.md)
+
+**Phase 4+ - Remaining Modules** (Future)
 The following modules are planned but not yet implemented:
 
 ### ❌ Blockers for Remaining Modules
@@ -669,8 +684,10 @@ arch-toolkit/
 #### Index Module (`feature = "index"`)
 - [ ] **Port installed package queries** - From `src/index/installed.rs`
 - [ ] **Port official repo queries** - From `src/index/query.rs`
-- [ ] **Port mirror management** - From `src/index/mirrors.rs`
+- [ ] **Port mirror management** - From `src/index/mirrors.rs` (optional, Windows-specific)
+- [ ] **Port index persistence** - From `src/index/persist.rs`
 - [ ] **Remove Pacsea-specific caching** - Let callers handle persistence
+- **Detailed Plan**: [INDEX_MODULE_PHASE.md](./INDEX_MODULE_PHASE.md)
 
 #### Install Module (`feature = "install"`)
 - [ ] **Port pacman command building** - From `src/install/command.rs`
@@ -954,15 +971,38 @@ The AUR module has been successfully extracted from Pacsea and published as `arc
 3. ✅ **Removed i18n dependency** - All operations return English-only data
 4. ✅ **Optional caching** - Caching is optional via `CacheConfig`, no hard dependencies
 
-### Phase 2 Status: 🚧 IN PROGRESS
+### Phase 2 Status: ✅ COMPLETED
 
-The Dependencies Module is partially complete in v0.1.2:
+The Dependencies Module is complete in v0.1.2:
 
-1. **Dependencies Module** - ✅ Parsing functions complete (SRCINFO, PKGBUILD, dependency specs), ✅ Version comparison utilities complete, ✅ Package querying complete, ✅ Source determination complete, ✅ Dependency resolution complete, ✅ Reverse dependency analysis complete, ✅ Module entry point complete (Task 2.5.1)
-2. **Index Module** - ⏳ Installed package queries, official repo queries, mirror management
-3. **Install Module** - ⏳ Pacman command building, AUR helper detection, batch operations
-4. **News Module** - ⏳ Arch news RSS, security advisories
-5. **Sandbox Module** - ⏳ PKGBUILD security analysis
+1. **Dependencies Module** - ✅ Complete (all tasks 2.1.1 through 2.6.3)
+   - ✅ Parsing functions (SRCINFO, PKGBUILD, dependency specs)
+   - ✅ Version comparison utilities
+   - ✅ Package querying
+   - ✅ Source determination
+   - ✅ Dependency resolution
+   - ✅ Reverse dependency analysis
+   - ✅ Module entry point
+   - **Plan Document**: [DEPENDENCIES_MODULE_PHASE.md](./DEPENDENCIES_MODULE_PHASE.md)
+
+### Phase 3 Status: ⏳ PLANNED
+
+The Index Module is planned but not yet started:
+
+1. **Index Module** - ⏳ Planned
+   - ⏳ Installed package queries
+   - ⏳ Official repo queries
+   - ⏳ Mirror management (optional)
+   - ⏳ Index persistence
+   - **Plan Document**: [INDEX_MODULE_PHASE.md](./INDEX_MODULE_PHASE.md)
+
+### Phase 4+ Status: ⏳ PLANNED
+
+The following modules are planned but not yet started:
+
+1. **Install Module** - ⏳ Pacman command building, AUR helper detection, batch operations
+2. **News Module** - ⏳ Arch news RSS, security advisories
+3. **Sandbox Module** - ⏳ PKGBUILD security analysis
 
 These modules may still have blockers similar to what the AUR module had:
 
@@ -976,16 +1016,23 @@ These modules may still have blockers similar to what the AUR module had:
    - Validates the approach
    - **Status**: Published as v0.1.0 on 2025-12-21, updated to v0.1.2 on 2025-12-22
 
-2. **Phase 2**: Add dependencies module (~30-40 hours) 🚧 **IN PROGRESS**
+2. **Phase 2**: Add dependencies module (~30-40 hours) ✅ **COMPLETED**
    - High reuse value
    - Complements AUR module
-   - **Status**: Parsing functions, version utilities, package querying, source determination, dependency resolution, reverse dependency analysis, and module entry point complete (v0.1.2)
-   - **Completed**: Dependency types, parsing (specs, SRCINFO, PKGBUILD, pacman output), version comparison utilities, package querying, source determination, dependency resolution, reverse dependency analysis, module entry point (Task 2.5.1)
-   - **Remaining**: AUR dependency queries (async .SRCINFO fetching limitation noted)
+   - **Status**: Complete - all core functionality implemented (v0.1.2)
+   - **Completed**: Dependency types, parsing (specs, SRCINFO, PKGBUILD, pacman output), version comparison utilities, package querying, source determination, dependency resolution, reverse dependency analysis, module entry point
+   - **Remaining**: AUR dependency queries (async .SRCINFO fetching limitation noted - future enhancement)
    - **Plan Document**: [DEPENDENCIES_MODULE_PHASE.md](./DEPENDENCIES_MODULE_PHASE.md)
 
-3. **Phase 3**: Add remaining modules incrementally ⏳ **PLANNED**
-   - Index, install, news, sandbox as needed
+3. **Phase 3**: Add index module (~20-30 hours) ⏳ **PLANNED**
+   - Package database queries (installed, official repos)
+   - Mirror management
+   - Index persistence
+   - **Status**: Not yet started
+   - **Plan Document**: [INDEX_MODULE_PHASE.md](./INDEX_MODULE_PHASE.md)
+
+4. **Phase 4+**: Add remaining modules incrementally ⏳ **PLANNED**
+   - Install, news, sandbox as needed
    - Each can be added independently
    - **Status**: Not yet started
 
