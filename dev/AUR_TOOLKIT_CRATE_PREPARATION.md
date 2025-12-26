@@ -48,13 +48,15 @@ This document analyzes framework-agnostic modules in Pacsea (`src/sources/`, `sr
   - ⏳ AUR dependency queries (async .SRCINFO fetching limitation noted - future enhancement)
   - **Detailed Plan**: [DEPENDENCIES_MODULE_PHASE.md](./DEPENDENCIES_MODULE_PHASE.md)
 
-**Phase 3 - Index Module: ⏳ PLANNED**
+**Phase 3 - Index Module: 🚧 IN PROGRESS**
 
 - Index module (package database queries)
-  - Installed package queries
-  - Official repository queries
-  - Mirror management
-  - Index persistence
+  - ✅ Installed package queries (Task 3.2.1 - complete)
+  - ✅ Explicit package tracking (Task 3.2.2 - complete)
+  - ✅ Index types (Task 3.1.1 - complete)
+  - ✅ Official repository queries (Task 3.3 - complete)
+  - ⏳ Mirror management (Task 3.5 - optional, pending)
+  - ⏳ Index persistence (Task 3.4 - pending)
 
 **Phase 4+ - Remaining Modules: ⏳ PLANNED**
 
@@ -682,11 +684,13 @@ arch-toolkit/
 - [ ] **Port AUR dependency queries** - From `src/logic/deps/aur.rs`
 
 #### Index Module (`feature = "index"`)
-- [ ] **Port installed package queries** - From `src/index/installed.rs`
-- [ ] **Port official repo queries** - From `src/index/query.rs`
-- [ ] **Port mirror management** - From `src/index/mirrors.rs` (optional, Windows-specific)
-- [ ] **Port index persistence** - From `src/index/persist.rs`
-- [ ] **Remove Pacsea-specific caching** - Let callers handle persistence
+- [x] **Create index types** - `OfficialPackage`, `OfficialIndex`, `IndexQueryResult`, `InstalledPackagesMode` (Task 3.1.1)
+- [x] **Port installed package queries** - From `src/index/installed.rs` (Task 3.2.1 - complete)
+- [x] **Port explicit package tracking** - From `src/index/explicit.rs` (Task 3.2.2 - complete)
+- [x] **Port official repo queries** - From `src/index/query.rs` (Task 3.3 - complete)
+- [ ] **Port index persistence** - From `src/index/persist.rs` (Task 3.4 - pending)
+- [ ] **Port mirror management** - From `src/index/mirrors.rs` (Task 3.5 - optional, Windows-specific, pending)
+- [x] **Remove Pacsea-specific caching** - Let callers handle persistence (for completed tasks)
 - **Detailed Plan**: [INDEX_MODULE_PHASE.md](./INDEX_MODULE_PHASE.md)
 
 #### Install Module (`feature = "install"`)
@@ -985,15 +989,18 @@ The Dependencies Module is complete in v0.1.2:
    - ✅ Module entry point
    - **Plan Document**: [DEPENDENCIES_MODULE_PHASE.md](./DEPENDENCIES_MODULE_PHASE.md)
 
-### Phase 3 Status: ⏳ PLANNED
+### Phase 3 Status: 🚧 IN PROGRESS
 
-The Index Module is planned but not yet started:
+The Index Module is partially complete:
 
-1. **Index Module** - ⏳ Planned
-   - ⏳ Installed package queries
-   - ⏳ Official repo queries
-   - ⏳ Mirror management (optional)
-   - ⏳ Index persistence
+1. **Index Module** - 🚧 In Progress
+   - ✅ Index types (`OfficialPackage`, `OfficialIndex`, `IndexQueryResult`, `InstalledPackagesMode`) - Task 3.1.1 complete
+   - ✅ Installed package queries (`refresh_installed_cache`, `is_installed`, `get_installed_packages`) - Task 3.2.1 complete
+   - ✅ Explicit package tracking (`refresh_explicit_cache`, `is_explicit`) - Task 3.2.2 complete
+   - ✅ Official repo queries (`search_official`, `all_official`, `fetch_official_index`, `fetch_official_index_async`) - Task 3.3 complete
+   - ✅ Module entry point updated with query/fetch modules - Task 3.7 partial
+   - ⏳ Index persistence (Task 3.4 - pending)
+   - ⏳ Mirror management (Task 3.5 - optional, pending)
    - **Plan Document**: [INDEX_MODULE_PHASE.md](./INDEX_MODULE_PHASE.md)
 
 ### Phase 4+ Status: ⏳ PLANNED
@@ -1024,11 +1031,14 @@ These modules may still have blockers similar to what the AUR module had:
    - **Remaining**: AUR dependency queries (async .SRCINFO fetching limitation noted - future enhancement)
    - **Plan Document**: [DEPENDENCIES_MODULE_PHASE.md](./DEPENDENCIES_MODULE_PHASE.md)
 
-3. **Phase 3**: Add index module (~20-30 hours) ⏳ **PLANNED**
-   - Package database queries (installed, official repos)
-   - Mirror management
-   - Index persistence
-   - **Status**: Not yet started
+3. **Phase 3**: Add index module (~20-30 hours) 🚧 **IN PROGRESS**
+   - ✅ Index types (Task 3.1.1 - complete)
+   - ✅ Installed package queries (Task 3.2.1 - complete)
+   - ✅ Explicit package tracking (Task 3.2.2 - complete)
+   - ✅ Official repository queries (Task 3.3 - complete)
+   - ⏳ Index persistence (Task 3.4 - pending)
+   - ⏳ Mirror management (Task 3.5 - optional, pending)
+   - **Status**: Tasks 3.1, 3.2, and 3.3 complete, remaining tasks pending
    - **Plan Document**: [INDEX_MODULE_PHASE.md](./INDEX_MODULE_PHASE.md)
 
 4. **Phase 4+**: Add remaining modules incrementally ⏳ **PLANNED**

@@ -13,6 +13,7 @@ default = ["aur"]
 aur = ["dep:reqwest", "dep:tokio", "dep:scraper", "dep:chrono", "dep:rand", "dep:lru", "dep:async-trait"]
 deps = []  # No additional dependencies for types only
 index = ["dep:tokio"]  # For async operations with spawn_blocking
+fuzzy-search = ["dep:fuzzy-matcher"]  # Optional fuzzy matching for search
 cache-disk = ["dep:dirs"]
 
 [dependencies]
@@ -43,6 +44,9 @@ async-trait = { version = "0.1", optional = true }
 
 # Directory utilities (for cache-disk feature)
 dirs = { version = "5.0", optional = true }
+
+# Fuzzy matching (for fuzzy-search feature)
+fuzzy-matcher = { version = "0.3", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

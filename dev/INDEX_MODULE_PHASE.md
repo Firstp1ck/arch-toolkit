@@ -13,7 +13,7 @@ This document provides a detailed structured plan for implementing the Index Mod
 | **Estimated Effort** | 20-30 hours |
 | **Complexity** | Medium (system command execution, data persistence, async operations) |
 | **Dependencies** | `types` module, optional `aur` module for enrichment |
-| **Status** | ⏳ Planned - Not yet started |
+| **Status** | 🚧 In Progress - Tasks 3.1, 3.2, and 3.3 complete |
 
 ## Overview
 
@@ -78,7 +78,7 @@ This module is foundational and used by other modules (deps, install) for packag
 - `OfficialIndex` - Collection of official packages with name lookup
   ```rust
   pub struct OfficialIndex {
-      pub packages: Vec<OfficialPackage>,
+      pub pkgs: Vec<OfficialPackage>,
       // Internal: name_to_idx for O(1) lookups
   }
   ```
@@ -89,15 +89,23 @@ This module is foundational and used by other modules (deps, install) for packag
       pub fuzzy_score: Option<i64>,
   }
   ```
+- `InstalledPackagesMode` - Filter mode for explicit package queries (added in Task 3.2)
+  ```rust
+  pub enum InstalledPackagesMode {
+      LeafOnly,      // pacman -Qetq
+      AllExplicit,   // pacman -Qeq
+  }
+  ```
 
 **Estimated Effort**: 2-3 hours
 
 **Acceptance Criteria**:
-- [ ] All types have rustdoc comments (What/Inputs/Output/Details)
-- [ ] Types are serializable with serde
-- [ ] `OfficialIndex` has `rebuild_name_index()` method
-- [ ] Unit tests for type operations
-- [ ] Code passes `cargo fmt`, `cargo clippy`, `cargo check`
+- [x] All types have rustdoc comments (What/Inputs/Output/Details)
+- [x] Types are serializable with serde
+- [x] `OfficialIndex` has `rebuild_name_index()` method
+- [x] `OfficialIndex` has `find_package_by_name()` method
+- [x] Unit tests for type operations
+- [x] Code passes `cargo fmt`, `cargo clippy`, `cargo check`
 
 ---
 
@@ -123,12 +131,12 @@ This module is foundational and used by other modules (deps, install) for packag
 **Estimated Effort**: 3-4 hours
 
 **Acceptance Criteria**:
-- [ ] Functions work without global state
-- [ ] Graceful degradation when pacman unavailable
-- [ ] Async operations use `spawn_blocking` correctly
-- [ ] Unit tests for installed package queries
-- [ ] Integration tests with mock pacman
-- [ ] Code passes quality checks
+- [x] Functions work without global state
+- [x] Graceful degradation when pacman unavailable
+- [x] Async operations use `spawn_blocking` correctly
+- [x] Unit tests for installed package queries
+- [x] Integration tests with mock pacman
+- [x] Code passes quality checks
 
 #### Task 3.2.2: Port Explicit Package Tracking
 
@@ -141,10 +149,10 @@ This module is foundational and used by other modules (deps, install) for packag
 **Estimated Effort**: 1-2 hours
 
 **Acceptance Criteria**:
-- [ ] Functions work without global state
-- [ ] Graceful degradation when pacman unavailable
-- [ ] Unit tests
-- [ ] Code passes quality checks
+- [x] Functions work without global state
+- [x] Graceful degradation when pacman unavailable
+- [x] Unit tests
+- [x] Code passes quality checks
 
 ---
 
@@ -171,11 +179,11 @@ This module is foundational and used by other modules (deps, install) for packag
 **Estimated Effort**: 4-5 hours
 
 **Acceptance Criteria**:
-- [ ] Functions accept `&OfficialIndex` parameter (no global state)
-- [ ] Fuzzy matching works correctly
-- [ ] Case-insensitive substring matching works
-- [ ] Unit tests for search functionality
-- [ ] Code passes quality checks
+- [x] Functions accept `&OfficialIndex` parameter (no global state)
+- [x] Fuzzy matching works correctly
+- [x] Case-insensitive substring matching works
+- [x] Unit tests for search functionality
+- [x] Code passes quality checks
 
 #### Task 3.3.2: Port Official Index Fetching
 
@@ -194,12 +202,12 @@ This module is foundational and used by other modules (deps, install) for packag
 **Estimated Effort**: 3-4 hours
 
 **Acceptance Criteria**:
-- [ ] Uses `reqwest` via arch-toolkit client
-- [ ] Respects rate limiting
-- [ ] Handles errors gracefully
-- [ ] Unit tests with mock HTTP responses
-- [ ] Integration tests (optional, requires network)
-- [ ] Code passes quality checks
+- [x] Uses `reqwest` via arch-toolkit client
+- [x] Respects rate limiting
+- [x] Handles errors gracefully
+- [x] Unit tests with mock HTTP responses
+- [x] Integration tests (optional, requires network)
+- [x] Code passes quality checks
 
 ---
 
@@ -306,11 +314,12 @@ This module is foundational and used by other modules (deps, install) for packag
 **Estimated Effort**: 1-2 hours
 
 **Acceptance Criteria**:
-- [ ] All public APIs exported
-- [ ] Comprehensive module documentation
-- [ ] Usage examples in rustdoc
-- [ ] Feature flags documented
-- [ ] Code passes quality checks
+- [x] All public APIs exported (for installed/explicit/query/fetch modules)
+- [x] Comprehensive module documentation
+- [x] Usage examples in rustdoc
+- [x] Feature flags documented
+- [x] Code passes quality checks
+- [ ] Additional exports for persist module (pending)
 
 ---
 
@@ -329,10 +338,11 @@ This module is foundational and used by other modules (deps, install) for packag
 **Estimated Effort**: 3-4 hours
 
 **Acceptance Criteria**:
-- [ ] All functions have unit tests
-- [ ] Error cases covered
-- [ ] Edge cases covered
-- [ ] Tests pass with `cargo test -- --test-threads=1`
+- [x] All functions have unit tests (for installed/explicit/query/fetch modules)
+- [x] Error cases covered (for installed/explicit/query/fetch modules)
+- [x] Edge cases covered (for installed/explicit/query/fetch modules)
+- [x] Tests pass with `cargo test -- --test-threads=1` (for completed modules)
+- [ ] Additional tests for persist module (pending)
 
 #### Task 3.8.2: Integration Tests
 
@@ -347,9 +357,10 @@ This module is foundational and used by other modules (deps, install) for packag
 **Estimated Effort**: 2-3 hours
 
 **Acceptance Criteria**:
-- [ ] Integration tests cover main workflows
-- [ ] Tests use mock commands where possible
-- [ ] Tests pass with `cargo test -- --test-threads=1`
+- [x] Integration tests cover main workflows (for installed/explicit modules)
+- [x] Tests use mock commands where possible (mock pacman scripts)
+- [x] Tests pass with `cargo test -- --test-threads=1` (for completed modules)
+- [ ] Additional integration tests for persist module (pending)
 
 #### Task 3.8.3: Documentation and Examples
 
@@ -376,7 +387,7 @@ This module is foundational and used by other modules (deps, install) for packag
 ```toml
 [features]
 default = ["aur"]
-index = []  # No additional dependencies, uses std and serde
+index = ["dep:tokio"]  # For async operations with spawn_blocking
 
 [dependencies]
 # Index module dependencies (always included)
@@ -388,7 +399,7 @@ fuzzy-matcher = { version = "0.3", optional = true }  # For fuzzy search
 tokio = { version = "1", features = ["rt", "time"], optional = true }  # For async operations
 ```
 
-**Note**: The index module should work without async by default, but async operations are available when `tokio` feature is enabled.
+**Note**: The index module includes tokio as a dependency for async operations. Async functions are available when the `index` feature is enabled.
 
 ---
 
@@ -466,30 +477,33 @@ Once the index module is complete, Pacsea can:
 
 The Index Module is complete when:
 
-- [ ] All core functionality ported (installed queries, official queries, persistence)
-- [ ] No dependencies on Pacsea internals
-- [ ] All functions have rustdoc documentation
-- [ ] Unit tests pass
-- [ ] Integration tests pass
+- [x] Installed package queries ported (Task 3.2)
+- [x] Explicit package tracking ported (Task 3.2)
+- [x] Official repository queries ported (Task 3.3)
+- [ ] Index persistence ported (Task 3.4)
+- [x] No dependencies on Pacsea internals (for completed tasks)
+- [x] All functions have rustdoc documentation (for completed tasks)
+- [x] Unit tests pass (for completed tasks)
+- [x] Integration tests pass (for completed tasks)
 - [ ] Example program works
-- [ ] Code passes `cargo fmt`, `cargo clippy`, `cargo check`
+- [x] Code passes `cargo fmt`, `cargo clippy`, `cargo check` (for completed tasks)
 - [ ] README updated with index module documentation
-- [ ] Module entry point complete
+- [x] Module entry point created (Task 3.7 - partial, installed/explicit modules complete)
 
 ---
 
 ## Timeline
 
-| Task | Estimated Hours | Priority |
-|------|----------------|----------|
-| 3.1: Define Types | 2-3 | High |
-| 3.2: Installed Queries | 4-6 | High |
-| 3.3: Official Queries | 7-9 | High |
+| Task | Estimated Hours | Priority | Status |
+|------|----------------|----------|--------|
+| 3.1: Define Types | 2-3 | High | ✅ Complete |
+| 3.2: Installed Queries | 4-6 | High | ✅ Complete |
+| 3.3: Official Queries | 7-9 | High | ✅ Complete |
 | 3.4: Persistence | 2-3 | High |
 | 3.5: Mirror Management | 2-3 | Medium (Optional) |
 | 3.6: Background Updates | 2-3 | Low (Optional) |
-| 3.7: Module Entry Point | 1-2 | High |
-| 3.8: Testing & Docs | 7-10 | High |
+| 3.7: Module Entry Point | 1-2 | High | ✅ Partial (installed/explicit/query/fetch complete) |
+| 3.8: Testing & Docs | 7-10 | High | ✅ Partial (installed/explicit/query/fetch complete) |
 | **Total** | **27-39 hours** | |
 
 **Recommended Approach**: Start with high-priority tasks (3.1-3.4, 3.7-3.8), then add optional features (3.5-3.6) as needed.
