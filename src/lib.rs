@@ -8,7 +8,7 @@
 //!
 //! - `aur`: AUR search, package info, comments, and PKGBUILD fetching
 //! - `deps`: Dependency resolution, parsing, and reverse dependency analysis
-//! - `index`: Package database queries (planned)
+//! - `index`: Package database queries (installed and explicit package tracking)
 //! - `install`: Installation command building (planned)
 //! - `news`: News feeds and security advisories (planned)
 //! - `sandbox`: PKGBUILD security analysis (planned)
@@ -148,6 +148,9 @@ mod env;
 #[cfg(feature = "deps")]
 pub mod deps;
 
+#[cfg(feature = "index")]
+pub mod index;
+
 /// Prelude module for convenient imports.
 ///
 /// This module re-exports commonly used types, traits, and functions,
@@ -178,6 +181,9 @@ pub use types::{
     Dependency, DependencySource, DependencySpec, DependencyStatus, PackageRef, PackageSource,
     ReverseDependencySummary, SrcinfoData,
 };
+
+#[cfg(feature = "index")]
+pub use types::index::{IndexQueryResult, InstalledPackagesMode, OfficialIndex, OfficialPackage};
 
 #[cfg(feature = "deps")]
 pub use deps::{

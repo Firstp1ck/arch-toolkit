@@ -12,7 +12,7 @@ categories = ["api-bindings", "command-line-utilities"]
 default = ["aur"]
 aur = ["dep:reqwest", "dep:tokio", "dep:scraper", "dep:chrono", "dep:rand", "dep:lru", "dep:async-trait"]
 deps = []  # No additional dependencies for types only
-index = []  # No additional dependencies, uses std and serde
+index = ["dep:tokio"]  # For async operations with spawn_blocking
 cache-disk = ["dep:dirs"]
 
 [dependencies]

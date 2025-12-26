@@ -121,6 +121,25 @@ pub struct IndexQueryResult {
     pub fuzzy_score: Option<i64>,
 }
 
+/// What: Filter mode for querying explicitly installed packages.
+///
+/// Inputs:
+/// - Used as parameter to explicit package query functions.
+///
+/// Output:
+/// - Determines which pacman command arguments are used.
+///
+/// Details:
+/// - `LeafOnly`: Uses `pacman -Qetq` (explicitly installed AND not required by other packages).
+/// - `AllExplicit`: Uses `pacman -Qeq` (all explicitly installed packages, including dependencies).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InstalledPackagesMode {
+    /// Query only leaf packages (explicitly installed and not required).
+    LeafOnly,
+    /// Query all explicitly installed packages.
+    AllExplicit,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
