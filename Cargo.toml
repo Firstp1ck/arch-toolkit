@@ -37,7 +37,7 @@ chrono = { version = "0.4", optional = true }
 rand = { version = "0.9", optional = true }
 
 # LRU cache (for cache feature)
-lru = { version = "0.12", optional = true }
+lru = { version = "0.16", optional = true }
 
 # Async trait support (for aur feature)
 async-trait = { version = "0.1", optional = true }
