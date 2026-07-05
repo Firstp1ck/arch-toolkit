@@ -9,7 +9,7 @@
 //! - `aur`: AUR search, package info, comments, and PKGBUILD fetching
 //! - `deps`: Dependency resolution, parsing, and reverse dependency analysis
 //! - `index`: Package database queries (installed and explicit package tracking)
-//! - `install`: Installation command building (planned)
+//! - `install`: Installation command building (pacman, AUR helpers, batch planning)
 //! - `news`: News feeds and security advisories (planned)
 //! - `sandbox`: PKGBUILD security analysis (planned)
 //!
@@ -161,6 +161,9 @@ pub mod deps;
 #[cfg(feature = "index")]
 pub mod index;
 
+#[cfg(feature = "install")]
+pub mod install;
+
 /// Prelude module for convenient imports.
 ///
 /// This module re-exports commonly used types, traits, and functions,
@@ -196,6 +199,9 @@ pub use types::{
 
 #[cfg(feature = "index")]
 pub use types::index::{IndexQueryResult, InstalledPackagesMode, OfficialIndex, OfficialPackage};
+
+#[cfg(feature = "install")]
+pub use types::install::{AurHelper, CascadeMode, CommandSpec, InstallOptions, PrivilegeTool};
 
 #[cfg(feature = "deps")]
 pub use deps::{

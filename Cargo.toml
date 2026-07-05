@@ -13,6 +13,7 @@ default = ["aur"]
 aur = ["dep:reqwest", "dep:tokio", "dep:scraper", "dep:chrono", "dep:rand", "dep:lru", "dep:async-trait"]
 deps = []  # No additional dependencies for types only
 index = ["dep:tokio"]  # For async operations with spawn_blocking
+install = ["deps"]  # Installation command building (uses deps types)
 fuzzy-search = ["dep:fuzzy-matcher"]  # Optional fuzzy matching for search
 cache-disk = ["dep:dirs"]
 

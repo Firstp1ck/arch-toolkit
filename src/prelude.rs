@@ -129,3 +129,16 @@ pub use crate::types::index::{
 
 #[cfg(feature = "index")]
 pub use crate::index::{fetch_official_index, load_from_disk, save_to_disk, search_official};
+
+// Install types and functions
+#[cfg(feature = "install")]
+pub use crate::types::install::{
+    AurHelper, CascadeMode, CommandSpec, InstallOptions, PrivilegeTool,
+};
+
+#[cfg(feature = "install")]
+pub use crate::install::{
+    InstallPlan, build_aur_install, build_batch_install, build_pacman_install,
+    build_remove_command, build_update_command, detect_aur_helper, detect_privilege_tool,
+    with_privilege,
+};

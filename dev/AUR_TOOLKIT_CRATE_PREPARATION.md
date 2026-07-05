@@ -60,9 +60,19 @@ This document analyzes framework-agnostic modules in Pacsea (`src/sources/`, `sr
   - ⏳ Mirror management (Task 3.5 - optional, pending)
   - ⏳ Background updates (Task 3.6 - optional, pending)
 
-**Phase 4+ - Remaining Modules: ⏳ PLANNED**
+**Phase 4 - Install Module: ✅ CORE COMPLETE (2026-07-05)**
 
-- Install module (command building)
+- Install module (command building — build, never execute)
+  - ✅ Install types (`AurHelper`, `PrivilegeTool`, `CascadeMode`, `CommandSpec`, `InstallOptions`) - Task 4.1
+  - ✅ Shell safety (`shell_single_quote`, `is_safe_package_name`, `validate_package_names`) - Task 4.2
+  - ✅ Detection (`detect_aur_helper` paru→yay, `detect_privilege_tool` sudo→doas) - Task 4.3
+  - ✅ Command builders (pacman install/remove/update, AUR helper install, `with_privilege`) - Task 4.3
+  - ✅ Batch planning (`build_batch_install` with official/AUR split, reinstall detection) - Task 4.4
+  - ✅ Module entry point, tests, example, README docs - Task 4.5
+  - **Plan Document**: [INSTALL_MODULE_PHASE.md](./INSTALL_MODULE_PHASE.md)
+
+**Phase 5+ - Remaining Modules: ⏳ PLANNED**
+
 - News module (RSS feeds, advisories)
 - Sandbox module (PKGBUILD security analysis)
 
@@ -696,10 +706,11 @@ arch-toolkit/
 - **Detailed Plan**: [INDEX_MODULE_PHASE.md](./INDEX_MODULE_PHASE.md)
 
 #### Install Module (`feature = "install"`)
-- [ ] **Port pacman command building** - From `src/install/command.rs`
-- [ ] **Port AUR helper detection** - From `src/install/executor.rs`
-- [ ] **Port batch operations** - From `src/install/batch.rs`
-- [ ] **Remove dry-run coupling** - Accept as parameter instead of global state
+- [x] **Port pacman command building** - From `src/install/command.rs` (install/remove/update builders returning `CommandSpec`, never executed)
+- [x] **Port AUR helper detection** - From `src/install/executor.rs` (`detect_aur_helper()`: paru → yay; plus `detect_privilege_tool()`: sudo → doas)
+- [x] **Port batch operations** - From `src/install/batch.rs` (`build_batch_install()` splits official/AUR, per-group reinstall detection via caller-provided installed set)
+- [x] **Remove dry-run coupling** - Resolved by design: commands are data (`CommandSpec`); dry run = display `to_shell_string()` instead of spawning
+- **Detailed Plan**: [INSTALL_MODULE_PHASE.md](./INSTALL_MODULE_PHASE.md)
 
 #### News Module (`feature = "news"`)
 - [ ] **Port Arch news RSS** - From `src/sources/news/`
@@ -1008,13 +1019,26 @@ The Index Module core functionality is complete:
    - **Plan Document**: [INDEX_MODULE_PHASE.md](./INDEX_MODULE_PHASE.md)
    - **Next**: Publish v0.2.0, then start Phase 4 (install module)
 
-### Phase 4+ Status: ⏳ PLANNED
+### Phase 4 Status: ✅ CORE COMPLETE (2026-07-05)
+
+The Install Module is complete with a "build, don't execute" design:
+
+1. **Install Module** - ✅ Core Complete
+   - ✅ Command builders return `CommandSpec` (argv-style); arch-toolkit never executes
+   - ✅ Pacman install/remove/update, AUR helper install, privilege wrapping
+   - ✅ Detection: `detect_aur_helper()` (paru→yay), `detect_privilege_tool()` (sudo→doas)
+   - ✅ Batch planning with official/AUR split and reinstall detection
+   - ✅ Shell safety: strict name validation, POSIX quoting, bash roundtrip tested
+   - ✅ Works standalone: `--no-default-features --features install`
+   - **Plan Document**: [INSTALL_MODULE_PHASE.md](./INSTALL_MODULE_PHASE.md)
+   - Out of scope by design: command execution, terminal spawning, password handling
+
+### Phase 5+ Status: ⏳ PLANNED
 
 The following modules are planned but not yet started:
 
-1. **Install Module** - ⏳ Pacman command building, AUR helper detection, batch operations
-2. **News Module** - ⏳ Arch news RSS, security advisories
-3. **Sandbox Module** - ⏳ PKGBUILD security analysis
+1. **News Module** - ⏳ Arch news RSS, security advisories
+2. **Sandbox Module** - ⏳ PKGBUILD security analysis
 
 These modules may still have blockers similar to what the AUR module had:
 
@@ -1048,8 +1072,12 @@ These modules may still have blockers similar to what the AUR module had:
    - **Status**: All required tasks complete (2026-07-05); ready for v0.2.0 release
    - **Plan Document**: [INDEX_MODULE_PHASE.md](./INDEX_MODULE_PHASE.md)
 
-4. **Phase 4+**: Add remaining modules incrementally ⏳ **PLANNED**
-   - Install, news, sandbox as needed
+4. **Phase 4**: Add install module ✅ **CORE COMPLETE** (2026-07-05)
+   - Command building (never execution), helper/privilege detection, batch planning
+   - **Plan Document**: [INSTALL_MODULE_PHASE.md](./INSTALL_MODULE_PHASE.md)
+
+5. **Phase 5+**: Add remaining modules incrementally ⏳ **PLANNED**
+   - News, sandbox as needed
    - Each can be added independently
    - **Status**: Not yet started
 

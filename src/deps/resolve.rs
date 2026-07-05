@@ -555,7 +555,6 @@ fn enhance_with_srcinfo<S: BuildHasher>(
 /// Details:
 /// - This is a no-op when `feature = "aur"` is not enabled.
 #[cfg(not(feature = "aur"))]
-#[allow(clippy::unused_parameters)]
 const fn enhance_with_srcinfo<S: BuildHasher>(
     _name: &str,
     deps: Vec<Dependency>,

@@ -35,9 +35,16 @@ Complete Rust toolkit for Arch Linux package management. Provides a unified API 
   - Index persistence (save/load the official index as JSON)
   - Sync and async APIs (async via `tokio::spawn_blocking`)
 
+- **Install Command Building** (`install` feature)
+  - Pacman install/remove/update command construction (build, never execute)
+  - AUR helper commands with paru/yay detection and preference
+  - Privilege tool detection (sudo/doas) and command wrapping
+  - Batch planning: split mixed target lists between pacman and an AUR helper
+  - Removal cascade modes (`-R`, `-Rs`, `-Rns`)
+  - Strict package-name validation and POSIX shell quoting
+
 ### Planned Features
 
-- Installation command building
 - News feeds and security advisories
 - PKGBUILD security analysis
 
@@ -55,6 +62,7 @@ arch-toolkit = "0.1.2"
 - `aur` (default): AUR search, package info, comments, and PKGBUILD fetching
 - `deps`: Dependency parsing from PKGBUILD, .SRCINFO, and pacman output
 - `index`: Package database queries (installed, explicit, official repositories) and index persistence
+- `install`: Installation command building (pacman, AUR helpers, batch planning; enables `deps`)
 - `fuzzy-search`: Fuzzy matching for official index search (used with `index`)
 - `cache-disk`: Enable disk-based caching for persistence across restarts
 
@@ -365,6 +373,43 @@ for result in search_official(&index, "ripgrep", false) {
 save_to_disk(&index, path)?;
 ```
 
+### Install Command Building
+
+Build (never execute) pacman and AUR helper commands (requires `install` feature):
+
+```rust
+use arch_toolkit::install::{
+    build_batch_install, build_remove_command, detect_aur_helper, detect_privilege_tool,
+    with_privilege,
+};
+use arch_toolkit::types::install::{CascadeMode, InstallOptions};
+use arch_toolkit::PackageRef;
+
+// Plan a mixed batch: official packages via pacman, AUR packages via paru/yay
+let targets = vec![
+    PackageRef::official("ripgrep", "14.0.0", "extra", "x86_64"),
+    PackageRef::aur("yay-bin", "12.0.0"),
+];
+let plan = build_batch_install(
+    &targets,
+    detect_aur_helper(),
+    detect_privilege_tool(),
+    &InstallOptions::default(),
+    None::<&std::collections::HashSet<String>>,
+)?;
+for command in &plan.commands {
+    println!("Would run: {command}");          // dry run = display, not execute
+    // command.to_command().status()?;         // or actually run it (argv, no shell)
+}
+
+// Removal with cascade control
+let remove = with_privilege(
+    detect_privilege_tool().expect("sudo or doas required"),
+    build_remove_command(&["old-package"], CascadeMode::CascadeWithConfigs, true)?,
+);
+println!("{remove}"); // sudo pacman -Rns --noconfirm old-package
+```
+
 ### Health Checks
 
 Monitor AUR service status:
@@ -396,6 +441,7 @@ See the `examples/` directory for comprehensive examples:
 - `examples/source_example.rs`: Source determination examples
 - `examples/version_example.rs`: Version comparison examples
 - `examples/index_example.rs`: Package index queries and persistence examples
+- `examples/install_example.rs`: Install command building and batch planning examples
 
 Run examples with:
 
@@ -414,6 +460,7 @@ cargo run --example reverse_example --features deps
 cargo run --example source_example --features deps
 cargo run --example version_example --features deps
 cargo run --example index_example --features index
+cargo run --example install_example --features install
 ```
 
 ## API Documentation

@@ -208,6 +208,58 @@ pub struct PackageRef {
     pub source: PackageSource,
 }
 
+impl PackageRef {
+    /// What: Create a reference to an official repository package.
+    ///
+    /// Inputs:
+    /// - `name`: Package name.
+    /// - `version`: Package version.
+    /// - `repo`: Repository name (e.g., "core", "extra").
+    /// - `arch`: Target architecture (e.g., `x86_64`, `any`).
+    ///
+    /// Output:
+    /// - `PackageRef` with `PackageSource::Official`.
+    ///
+    /// Details:
+    /// - Convenience constructor for resolution and install-planning inputs.
+    #[must_use]
+    pub fn official(
+        name: impl Into<String>,
+        version: impl Into<String>,
+        repo: impl Into<String>,
+        arch: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            version: version.into(),
+            source: PackageSource::Official {
+                repo: repo.into(),
+                arch: arch.into(),
+            },
+        }
+    }
+
+    /// What: Create a reference to an AUR package.
+    ///
+    /// Inputs:
+    /// - `name`: Package name.
+    /// - `version`: Package version.
+    ///
+    /// Output:
+    /// - `PackageRef` with `PackageSource::Aur`.
+    ///
+    /// Details:
+    /// - Convenience constructor for resolution and install-planning inputs.
+    #[must_use]
+    pub fn aur(name: impl Into<String>, version: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            version: version.into(),
+            source: PackageSource::Aur,
+        }
+    }
+}
+
 /// Parsed dependency specification (name with optional version requirement).
 ///
 /// Result of parsing a dependency string like "python>=3.12" or "glibc".

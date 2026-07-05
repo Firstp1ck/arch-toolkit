@@ -11,6 +11,9 @@ pub mod dependency;
 #[cfg(feature = "index")]
 pub mod index;
 
+#[cfg(feature = "install")]
+pub mod install;
+
 pub use package::{AurComment, AurPackage, AurPackageDetails};
 
 #[cfg(feature = "aur")]
@@ -24,3 +27,6 @@ pub use dependency::{
 
 #[cfg(feature = "index")]
 pub use index::{IndexQueryResult, OfficialIndex, OfficialPackage};
+
+#[cfg(feature = "install")]
+pub use install::{AurHelper, CascadeMode, CommandSpec, InstallOptions, PrivilegeTool};

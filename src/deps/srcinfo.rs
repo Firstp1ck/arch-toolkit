@@ -6,6 +6,7 @@
 use std::collections::HashSet;
 
 use crate::deps::parse::parse_dep_spec;
+#[cfg(feature = "aur")]
 use crate::error::Result;
 use crate::types::SrcinfoData;
 
