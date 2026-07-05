@@ -71,9 +71,17 @@ This document analyzes framework-agnostic modules in Pacsea (`src/sources/`, `sr
   - ✅ Module entry point, tests, example, README docs - Task 4.5
   - **Plan Document**: [INSTALL_MODULE_PHASE.md](./INSTALL_MODULE_PHASE.md)
 
-**Phase 5+ - Remaining Modules: ⏳ PLANNED**
+**Phase 5 - News Module: ✅ CORE COMPLETE (2026-07-05)**
 
-- News module (RSS feeds, advisories)
+- News module (Arch news RSS, security advisories)
+  - ✅ News types (`ArchNewsItem`, `SecurityAdvisory`, `AdvisorySeverity`) - Task 5.1
+  - ✅ Arch news RSS fetch + parse with date normalization - Task 5.2
+  - ✅ Security advisories Atom fetch + parse (severity/packages from content block) - Task 5.3
+  - ✅ Module entry point, tests, example, README docs - Task 5.4
+  - **Plan Document**: [NEWS_MODULE_PHASE.md](./NEWS_MODULE_PHASE.md)
+
+**Phase 6 - Remaining Modules: ⏳ PLANNED**
+
 - Sandbox module (PKGBUILD security analysis)
 
 ## Existing Crates on crates.io
@@ -114,8 +122,8 @@ Before proceeding, here's a comprehensive analysis of what already exists in the
 - ✅ AUR operations (search, info, comments, PKGBUILD)
 - ✅ Dependency parsing and resolution (SRCINFO, PKGBUILD, resolver, reverse deps)
 - ✅ Package index queries (installed, official repos, persistence)
-- ⏳ Installation command building
-- ⏳ News feeds and advisories
+- ✅ Installation command building (build-only, batch planning)
+- ✅ News feeds and security advisories
 - ⏳ PKGBUILD security analysis
 
 **Gaps in existing crates:**
@@ -713,9 +721,10 @@ arch-toolkit/
 - **Detailed Plan**: [INSTALL_MODULE_PHASE.md](./INSTALL_MODULE_PHASE.md)
 
 #### News Module (`feature = "news"`)
-- [ ] **Port Arch news RSS** - From `src/sources/news/`
-- [ ] **Port security advisories** - From `src/sources/advisories.rs`
-- [ ] **Remove status translation** - Drop `src/sources/status/translate.rs` (i18n coupling)
+- [x] **Port Arch news RSS** - From `src/sources/news/` (pure `parse_arch_news_rss()` + `fetch_arch_news()` with caller-provided client)
+- [x] **Port security advisories** - From `src/sources/advisories.rs` (improved: severity + packages parsed from the feed's content block; Pacsea left them empty)
+- [x] **Remove status translation** - Dropped by design (i18n coupling; not extracted)
+- **Detailed Plan**: [NEWS_MODULE_PHASE.md](./NEWS_MODULE_PHASE.md)
 
 #### Sandbox Module (`feature = "sandbox"`)
 - [ ] **Port PKGBUILD analysis** - From `src/logic/sandbox/analyze.rs`
@@ -1033,12 +1042,24 @@ The Install Module is complete with a "build, don't execute" design:
    - **Plan Document**: [INSTALL_MODULE_PHASE.md](./INSTALL_MODULE_PHASE.md)
    - Out of scope by design: command execution, terminal spawning, password handling
 
-### Phase 5+ Status: ⏳ PLANNED
+### Phase 5 Status: ✅ CORE COMPLETE (2026-07-05)
 
-The following modules are planned but not yet started:
+The News Module is complete:
 
-1. **News Module** - ⏳ Arch news RSS, security advisories
-2. **Sandbox Module** - ⏳ PKGBUILD security analysis
+1. **News Module** - ✅ Core Complete
+   - ✅ Arch news RSS: `fetch_arch_news()` / `parse_arch_news_rss()` with `YYYY-MM-DD` date normalization
+   - ✅ Security advisories: `fetch_security_advisories()` / `parse_advisories_atom()` with severity and package extraction from the feed content block
+   - ✅ Pure parsers testable offline; fetchers take a caller-provided `reqwest::Client`
+   - ✅ Live feeds verified (news + advisories fetch and parse correctly)
+   - ✅ Works standalone: `--no-default-features --features news`
+   - **Plan Document**: [NEWS_MODULE_PHASE.md](./NEWS_MODULE_PHASE.md)
+   - Out of scope by design: article HTML extraction, feed aggregation UI types, caching
+
+### Phase 6 Status: ⏳ PLANNED
+
+The following module is planned but not yet started:
+
+1. **Sandbox Module** - ⏳ PKGBUILD security analysis
 
 These modules may still have blockers similar to what the AUR module had:
 
@@ -1076,9 +1097,12 @@ These modules may still have blockers similar to what the AUR module had:
    - Command building (never execution), helper/privilege detection, batch planning
    - **Plan Document**: [INSTALL_MODULE_PHASE.md](./INSTALL_MODULE_PHASE.md)
 
-5. **Phase 5+**: Add remaining modules incrementally ⏳ **PLANNED**
-   - News, sandbox as needed
-   - Each can be added independently
+5. **Phase 5**: Add news module ✅ **CORE COMPLETE** (2026-07-05)
+   - Arch news RSS + security advisories with offline-testable parsers
+   - **Plan Document**: [NEWS_MODULE_PHASE.md](./NEWS_MODULE_PHASE.md)
+
+6. **Phase 6**: Add sandbox module ⏳ **PLANNED**
+   - PKGBUILD security analysis
    - **Status**: Not yet started
 
 ### Benefits of Unified Crate

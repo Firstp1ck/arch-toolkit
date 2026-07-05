@@ -10,7 +10,7 @@
 //! - `deps`: Dependency resolution, parsing, and reverse dependency analysis
 //! - `index`: Package database queries (installed and explicit package tracking)
 //! - `install`: Installation command building (pacman, AUR helpers, batch planning)
-//! - `news`: News feeds and security advisories (planned)
+//! - `news`: Arch news RSS and security advisories
 //! - `sandbox`: PKGBUILD security analysis (planned)
 //!
 //! # Examples
@@ -164,6 +164,9 @@ pub mod index;
 #[cfg(feature = "install")]
 pub mod install;
 
+#[cfg(feature = "news")]
+pub mod news;
+
 /// Prelude module for convenient imports.
 ///
 /// This module re-exports commonly used types, traits, and functions,
@@ -202,6 +205,9 @@ pub use types::index::{IndexQueryResult, InstalledPackagesMode, OfficialIndex, O
 
 #[cfg(feature = "install")]
 pub use types::install::{AurHelper, CascadeMode, CommandSpec, InstallOptions, PrivilegeTool};
+
+#[cfg(feature = "news")]
+pub use types::news::{AdvisorySeverity, ArchNewsItem, SecurityAdvisory};
 
 #[cfg(feature = "deps")]
 pub use deps::{

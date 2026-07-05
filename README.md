@@ -43,9 +43,14 @@ Complete Rust toolkit for Arch Linux package management. Provides a unified API 
   - Removal cascade modes (`-R`, `-Rs`, `-Rns`)
   - Strict package-name validation and POSIX shell quoting
 
+- **News & Security Advisories** (`news` feature)
+  - Arch Linux news RSS fetching with date normalization
+  - Security advisory Atom feed with severity and package extraction
+  - Pure parse functions (testable offline against recorded feeds)
+  - Cutoff-date filtering for incremental fetches
+
 ### Planned Features
 
-- News feeds and security advisories
 - PKGBUILD security analysis
 
 ## Installation
@@ -63,6 +68,7 @@ arch-toolkit = "0.1.2"
 - `deps`: Dependency parsing from PKGBUILD, .SRCINFO, and pacman output
 - `index`: Package database queries (installed, explicit, official repositories) and index persistence
 - `install`: Installation command building (pacman, AUR helpers, batch planning; enables `deps`)
+- `news`: Arch news RSS and security advisories
 - `fuzzy-search`: Fuzzy matching for official index search (used with `index`)
 - `cache-disk`: Enable disk-based caching for persistence across restarts
 
@@ -410,6 +416,26 @@ let remove = with_privilege(
 println!("{remove}"); // sudo pacman -Rns --noconfirm old-package
 ```
 
+### News and Security Advisories
+
+Fetch Arch news and advisories (requires `news` feature):
+
+```rust
+use arch_toolkit::news::{fetch_arch_news, fetch_security_advisories};
+
+let client = reqwest::Client::new();
+
+// Latest news, dates normalized to YYYY-MM-DD
+for item in fetch_arch_news(&client, 10, None).await? {
+    println!("{} {}", item.date, item.title);
+}
+
+// Advisories since a date, with severity and affected packages
+for advisory in fetch_security_advisories(&client, 20, Some("2026-01-01")).await? {
+    println!("{} [{}] {:?}", advisory.date, advisory.severity, advisory.packages);
+}
+```
+
 ### Health Checks
 
 Monitor AUR service status:
@@ -442,6 +468,7 @@ See the `examples/` directory for comprehensive examples:
 - `examples/version_example.rs`: Version comparison examples
 - `examples/index_example.rs`: Package index queries and persistence examples
 - `examples/install_example.rs`: Install command building and batch planning examples
+- `examples/news_example.rs`: Arch news and security advisory examples
 
 Run examples with:
 
@@ -461,6 +488,7 @@ cargo run --example source_example --features deps
 cargo run --example version_example --features deps
 cargo run --example index_example --features index
 cargo run --example install_example --features install
+cargo run --example news_example --features news
 ```
 
 ## API Documentation

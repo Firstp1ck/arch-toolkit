@@ -142,3 +142,10 @@ pub use crate::install::{
     build_remove_command, build_update_command, detect_aur_helper, detect_privilege_tool,
     with_privilege,
 };
+
+// News types and functions
+#[cfg(feature = "news")]
+pub use crate::types::news::{AdvisorySeverity, ArchNewsItem, SecurityAdvisory};
+
+#[cfg(feature = "news")]
+pub use crate::news::{fetch_arch_news, fetch_security_advisories};
