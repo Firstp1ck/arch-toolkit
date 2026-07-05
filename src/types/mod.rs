@@ -17,6 +17,9 @@ pub mod install;
 #[cfg(feature = "news")]
 pub mod news;
 
+#[cfg(feature = "sandbox")]
+pub mod sandbox;
+
 pub use package::{AurComment, AurPackage, AurPackageDetails};
 
 #[cfg(feature = "aur")]
@@ -36,3 +39,6 @@ pub use install::{AurHelper, CascadeMode, CommandSpec, InstallOptions, Privilege
 
 #[cfg(feature = "news")]
 pub use news::{AdvisorySeverity, ArchNewsItem, SecurityAdvisory};
+
+#[cfg(feature = "sandbox")]
+pub use sandbox::{DependencyDelta, SandboxInfo};

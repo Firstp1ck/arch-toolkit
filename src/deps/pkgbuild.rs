@@ -83,6 +83,12 @@ pub fn parse_pkgbuild_deps(pkgbuild: &str) -> (Vec<String>, Vec<String>, Vec<Str
                         //     'bar'
                         // )
                         let mut array_lines = Vec::new();
+                        // Content may follow the opening parenthesis on the
+                        // declaration line: depends=('foo'
+                        let first = value[1..].trim();
+                        if !first.is_empty() && !first.starts_with('#') {
+                            array_lines.push(first.to_string());
+                        }
                         // Collect lines until we find the closing parenthesis
                         while i < lines.len() {
                             let next_line = lines[i].trim();
@@ -836,5 +842,31 @@ conflicts=('pkg1' 'pkg2' 'pkg1' 'pkg3')
     fn test_parse_pkgbuild_conflicts_empty() {
         let conflicts = parse_pkgbuild_conflicts("");
         assert!(conflicts.is_empty());
+    }
+
+    #[test]
+    /// What: Verify multi-line arrays keep the entry on the declaration line.
+    ///
+    /// Inputs:
+    /// - Array whose first entry follows the opening parenthesis and whose
+    ///   remaining entries sit on continuation lines.
+    ///
+    /// Output:
+    /// - All entries parsed, including the one on the `optdepends=(` line.
+    ///
+    /// Details:
+    /// - Regression test: the multi-line branch used to discard content after
+    ///   the opening parenthesis on the declaration line.
+    fn test_multiline_array_keeps_first_line_entry() {
+        let pkgbuild = "optdepends=('cups: printing support'\n            'foo: extra feature')\ndepends=('glibc'\n         'gcc-libs'\n)";
+        let (depends, _makedepends, _checkdepends, optdepends) = parse_pkgbuild_deps(pkgbuild);
+        assert_eq!(
+            optdepends,
+            vec![
+                "cups: printing support".to_string(),
+                "foo: extra feature".to_string()
+            ]
+        );
+        assert_eq!(depends, vec!["glibc".to_string(), "gcc-libs".to_string()]);
     }
 }

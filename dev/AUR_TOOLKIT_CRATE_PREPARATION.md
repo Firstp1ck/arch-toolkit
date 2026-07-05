@@ -80,9 +80,18 @@ This document analyzes framework-agnostic modules in Pacsea (`src/sources/`, `sr
   - ✅ Module entry point, tests, example, README docs - Task 5.4
   - **Plan Document**: [NEWS_MODULE_PHASE.md](./NEWS_MODULE_PHASE.md)
 
-**Phase 6 - Remaining Modules: ⏳ PLANNED**
+**Phase 6 - Sandbox Module: ✅ CORE COMPLETE (2026-07-05)**
 
-- Sandbox module (PKGBUILD security analysis)
+- Sandbox module (build-preflight dependency analysis)
+  - ✅ Sandbox types (`DependencyDelta`, `SandboxInfo` with readiness helpers) - Task 6.1
+  - ✅ Dependency delta analysis from PKGBUILD/.SRCINFO (reuses Phase 2 parsers) - Task 6.2
+  - ✅ Module entry point, tests, example, README docs - Task 6.3
+  - Note: scope corrected — Pacsea's sandbox is dependency preflight, not security scoring
+  - **Plan Document**: [SANDBOX_MODULE_PHASE.md](./SANDBOX_MODULE_PHASE.md)
+
+**All six planned modules are now core-complete.** Remaining work: optional index
+extras (mirror management, background updates), future enhancements per phase docs,
+and the v0.2.0 release.
 
 ## Existing Crates on crates.io
 
@@ -124,7 +133,7 @@ Before proceeding, here's a comprehensive analysis of what already exists in the
 - ✅ Package index queries (installed, official repos, persistence)
 - ✅ Installation command building (build-only, batch planning)
 - ✅ News feeds and security advisories
-- ⏳ PKGBUILD security analysis
+- ✅ Build-preflight dependency analysis (PKGBUILD security linting: future enhancement)
 
 **Gaps in existing crates:**
 1. **Fragmented** - Need multiple crates for complete functionality
@@ -727,9 +736,10 @@ arch-toolkit/
 - **Detailed Plan**: [NEWS_MODULE_PHASE.md](./NEWS_MODULE_PHASE.md)
 
 #### Sandbox Module (`feature = "sandbox"`)
-- [ ] **Port PKGBUILD analysis** - From `src/logic/sandbox/analyze.rs`
-- [ ] **Port risk categorization** - From `src/logic/sandbox/types.rs`
-- [ ] **Port sandbox parsing** - From `src/logic/sandbox/parse.rs`
+- [x] **Port PKGBUILD analysis** - From `src/logic/sandbox/analyze.rs` (dependency delta analysis; improved: version constraints actually checked via `parse_dep_spec`)
+- [x] **Port risk categorization** - N/A: no risk-scoring code exists in Pacsea (scope corrected; `DependencyDelta`/`SandboxInfo` ported instead)
+- [x] **Port sandbox parsing** - Already ported in Phase 2 as `deps::parse_pkgbuild_deps` (multi-line first-entry parser bug found and fixed during this phase)
+- **Detailed Plan**: [SANDBOX_MODULE_PHASE.md](./SANDBOX_MODULE_PHASE.md)
 
 #### Documentation & Testing
 - [x] **Write comprehensive docs** - Add crate-level documentation with examples for each module
@@ -1055,11 +1065,17 @@ The News Module is complete:
    - **Plan Document**: [NEWS_MODULE_PHASE.md](./NEWS_MODULE_PHASE.md)
    - Out of scope by design: article HTML extraction, feed aggregation UI types, caching
 
-### Phase 6 Status: ⏳ PLANNED
+### Phase 6 Status: ✅ CORE COMPLETE (2026-07-05)
 
-The following module is planned but not yet started:
+The Sandbox Module is complete:
 
-1. **Sandbox Module** - ⏳ PKGBUILD security analysis
+1. **Sandbox Module** - ✅ Core Complete
+   - ✅ Build-preflight dependency analysis: `analyze_pkgbuild()` / `analyze_srcinfo()` compare declared deps against host installed/provided sets
+   - ✅ `SandboxInfo::missing_packages()` / `is_ready_to_build()` reporting
+   - ✅ Version constraints actually checked (fixes a latent Pacsea quirk)
+   - ✅ Works standalone: `--no-default-features --features sandbox`
+   - Scope note: Pacsea's sandbox is dependency preflight; security risk scoring never existed there (future enhancement)
+   - **Plan Document**: [SANDBOX_MODULE_PHASE.md](./SANDBOX_MODULE_PHASE.md)
 
 These modules may still have blockers similar to what the AUR module had:
 
@@ -1101,9 +1117,11 @@ These modules may still have blockers similar to what the AUR module had:
    - Arch news RSS + security advisories with offline-testable parsers
    - **Plan Document**: [NEWS_MODULE_PHASE.md](./NEWS_MODULE_PHASE.md)
 
-6. **Phase 6**: Add sandbox module ⏳ **PLANNED**
-   - PKGBUILD security analysis
-   - **Status**: Not yet started
+6. **Phase 6**: Add sandbox module ✅ **CORE COMPLETE** (2026-07-05)
+   - Build-preflight dependency analysis (scope corrected from "security analysis")
+   - **Plan Document**: [SANDBOX_MODULE_PHASE.md](./SANDBOX_MODULE_PHASE.md)
+
+**All six planned modules are core-complete. Next: publish v0.2.0.**
 
 ### Benefits of Unified Crate
 

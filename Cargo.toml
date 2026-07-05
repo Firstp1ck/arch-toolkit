@@ -15,6 +15,7 @@ deps = []  # No additional dependencies for types only
 index = ["dep:tokio"]  # For async operations with spawn_blocking
 install = ["deps"]  # Installation command building (uses deps types)
 news = ["dep:reqwest", "dep:tokio", "dep:chrono"]  # Arch news RSS and security advisories
+sandbox = ["deps"]  # Build-preflight dependency analysis (uses deps parsers)
 fuzzy-search = ["dep:fuzzy-matcher"]  # Optional fuzzy matching for search
 cache-disk = ["dep:dirs"]
 

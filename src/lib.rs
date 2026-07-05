@@ -11,7 +11,7 @@
 //! - `index`: Package database queries (installed and explicit package tracking)
 //! - `install`: Installation command building (pacman, AUR helpers, batch planning)
 //! - `news`: Arch news RSS and security advisories
-//! - `sandbox`: PKGBUILD security analysis (planned)
+//! - `sandbox`: Build-preflight dependency analysis (PKGBUILD/.SRCINFO vs host)
 //!
 //! # Examples
 //!
@@ -167,6 +167,9 @@ pub mod install;
 #[cfg(feature = "news")]
 pub mod news;
 
+#[cfg(feature = "sandbox")]
+pub mod sandbox;
+
 /// Prelude module for convenient imports.
 ///
 /// This module re-exports commonly used types, traits, and functions,
@@ -208,6 +211,9 @@ pub use types::install::{AurHelper, CascadeMode, CommandSpec, InstallOptions, Pr
 
 #[cfg(feature = "news")]
 pub use types::news::{AdvisorySeverity, ArchNewsItem, SecurityAdvisory};
+
+#[cfg(feature = "sandbox")]
+pub use types::sandbox::{DependencyDelta, SandboxInfo};
 
 #[cfg(feature = "deps")]
 pub use deps::{

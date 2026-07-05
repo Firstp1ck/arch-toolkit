@@ -149,3 +149,10 @@ pub use crate::types::news::{AdvisorySeverity, ArchNewsItem, SecurityAdvisory};
 
 #[cfg(feature = "news")]
 pub use crate::news::{fetch_arch_news, fetch_security_advisories};
+
+// Sandbox types and functions
+#[cfg(feature = "sandbox")]
+pub use crate::types::sandbox::{DependencyDelta, SandboxInfo};
+
+#[cfg(feature = "sandbox")]
+pub use crate::sandbox::{analyze_pkgbuild, analyze_srcinfo};
