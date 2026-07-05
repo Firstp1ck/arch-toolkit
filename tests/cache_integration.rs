@@ -14,7 +14,7 @@ use std::time::Duration;
 async fn test_search_caching() -> Result<()> {
     let cache_config = CacheConfigBuilder::new()
         .enable_search(true)
-        .search_ttl(Duration::from_secs(300))
+        .search_ttl(Duration::from_mins(5))
         .build();
 
     let client = ArchClient::builder().cache_config(cache_config).build()?;
@@ -46,7 +46,7 @@ async fn test_search_caching() -> Result<()> {
 async fn test_info_caching() -> Result<()> {
     let cache_config = CacheConfigBuilder::new()
         .enable_info(true)
-        .info_ttl(Duration::from_secs(900))
+        .info_ttl(Duration::from_mins(15))
         .build();
 
     let client = ArchClient::builder().cache_config(cache_config).build()?;
@@ -79,7 +79,7 @@ async fn test_info_caching() -> Result<()> {
 async fn test_comments_caching() -> Result<()> {
     let cache_config = CacheConfigBuilder::new()
         .enable_comments(true)
-        .comments_ttl(Duration::from_secs(600))
+        .comments_ttl(Duration::from_mins(10))
         .build();
 
     let client = ArchClient::builder().cache_config(cache_config).build()?;
@@ -104,7 +104,7 @@ async fn test_comments_caching() -> Result<()> {
 async fn test_pkgbuild_caching() -> Result<()> {
     let cache_config = CacheConfigBuilder::new()
         .enable_pkgbuild(true)
-        .pkgbuild_ttl(Duration::from_secs(3600))
+        .pkgbuild_ttl(Duration::from_hours(1))
         .build();
 
     let client = ArchClient::builder().cache_config(cache_config).build()?;
@@ -163,7 +163,7 @@ async fn test_different_ttls() -> Result<()> {
         .enable_search(true)
         .search_ttl(Duration::from_secs(1)) // Very short TTL: 1 second
         .enable_info(true)
-        .info_ttl(Duration::from_secs(300)) // Longer TTL: 5 minutes
+        .info_ttl(Duration::from_mins(5)) // Longer TTL: 5 minutes
         .build();
 
     let client = ArchClient::builder().cache_config(cache_config).build()?;
@@ -213,7 +213,7 @@ async fn test_different_ttls() -> Result<()> {
 async fn test_cache_size_limit() -> Result<()> {
     let cache_config = CacheConfigBuilder::new()
         .enable_search(true)
-        .search_ttl(Duration::from_secs(300))
+        .search_ttl(Duration::from_mins(5))
         .memory_cache_size(2) // Very small cache: only 2 entries
         .build();
 

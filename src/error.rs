@@ -13,10 +13,12 @@ pub enum ArchToolkitError {
     /// Note: For AUR operations, prefer using operation-specific error variants
     /// (`SearchFailed`, `InfoFailed`, `CommentsFailed`, `PkgbuildFailed`) to preserve context.
     /// This variant is retained for client initialization and non-AUR operations.
+    #[cfg(feature = "aur")]
     #[error("Network error: {0}")]
     Network(reqwest::Error),
 
     /// AUR search operation failed.
+    #[cfg(feature = "aur")]
     #[error("AUR search failed for query '{query}': {source}")]
     SearchFailed {
         /// The search query that failed.
@@ -27,6 +29,7 @@ pub enum ArchToolkitError {
     },
 
     /// AUR info fetch operation failed.
+    #[cfg(feature = "aur")]
     #[error("AUR info fetch failed for packages [{packages}]: {source}")]
     InfoFailed {
         /// Comma-separated list of package names that failed.
@@ -37,6 +40,7 @@ pub enum ArchToolkitError {
     },
 
     /// AUR comments fetch operation failed.
+    #[cfg(feature = "aur")]
     #[error("AUR comments fetch failed for package '{package}': {source}")]
     CommentsFailed {
         /// The package name that failed.
@@ -47,6 +51,7 @@ pub enum ArchToolkitError {
     },
 
     /// PKGBUILD fetch operation failed.
+    #[cfg(feature = "aur")]
     #[error("PKGBUILD fetch failed for package '{package}': {source}")]
     PkgbuildFailed {
         /// The package name that failed.
@@ -59,6 +64,16 @@ pub enum ArchToolkitError {
     /// JSON parsing error.
     #[error("JSON parsing error: {0}")]
     Json(#[from] serde_json::Error),
+
+    /// File I/O error with path context.
+    #[error("I/O error at '{path}': {source}")]
+    Io {
+        /// The file path where the I/O operation failed.
+        path: String,
+        /// The underlying I/O error.
+        #[source]
+        source: std::io::Error,
+    },
 
     /// Custom parsing error with message.
     #[error("Parse error: {0}")]
@@ -119,6 +134,7 @@ pub enum ArchToolkitError {
     },
 }
 
+#[cfg(feature = "aur")]
 impl ArchToolkitError {
     /// What: Create a `SearchFailed` error with query context.
     ///
@@ -197,6 +213,28 @@ impl ArchToolkitError {
     pub fn pkgbuild_failed(package: impl Into<String>, source: reqwest::Error) -> Self {
         Self::PkgbuildFailed {
             package: package.into(),
+            source,
+        }
+    }
+}
+
+impl ArchToolkitError {
+    /// What: Create an `Io` error with file path context.
+    ///
+    /// Inputs:
+    /// - `path`: The file path where the I/O operation failed
+    /// - `source`: The underlying I/O error
+    ///
+    /// Output:
+    /// - `ArchToolkitError::Io` variant
+    ///
+    /// Details:
+    /// - Convenience constructor for file I/O errors
+    /// - Preserves both the path and the underlying error
+    #[must_use]
+    pub fn io(path: impl Into<String>, source: std::io::Error) -> Self {
+        Self::Io {
+            path: path.into(),
             source,
         }
     }

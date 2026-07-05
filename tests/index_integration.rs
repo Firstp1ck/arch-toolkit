@@ -329,4 +329,164 @@ exit 1
         assert!(result.is_ok());
         // Result may be empty if pacman unavailable, which is graceful degradation
     }
+
+    /// Helper to build a sample index for persistence tests.
+    fn sample_index() -> arch_toolkit::index::OfficialIndex {
+        let mut index = arch_toolkit::index::OfficialIndex {
+            pkgs: vec![
+                arch_toolkit::index::OfficialPackage {
+                    name: "ripgrep".to_string(),
+                    repo: "extra".to_string(),
+                    arch: "x86_64".to_string(),
+                    version: "14.0.0".to_string(),
+                    description: "Fast grep".to_string(),
+                },
+                arch_toolkit::index::OfficialPackage {
+                    name: "vim".to_string(),
+                    repo: "extra".to_string(),
+                    arch: "x86_64".to_string(),
+                    version: "9.0".to_string(),
+                    description: "Text editor".to_string(),
+                },
+            ],
+            name_to_idx: std::collections::HashMap::new(),
+        };
+        index.rebuild_name_index();
+        index
+    }
+
+    /// Helper to create a unique temp file path for persistence tests.
+    fn temp_index_path(tag: &str) -> std::path::PathBuf {
+        let mut path = std::env::temp_dir();
+        path.push(format!(
+            "arch_toolkit_index_integration_{tag}_{}_{}.json",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("System time is before UNIX epoch")
+                .as_nanos()
+        ));
+        path
+    }
+
+    #[test]
+    /// What: Verify the full save → load → search workflow.
+    ///
+    /// Inputs:
+    /// - Sample index persisted to disk, reloaded, then queried.
+    ///
+    /// Output:
+    /// - Loaded index supports both name lookup and substring search.
+    ///
+    /// Details:
+    /// - Exercises persistence together with the query API end to end.
+    fn persist_roundtrip_supports_queries() {
+        use arch_toolkit::index::{load_from_disk, save_to_disk, search_official};
+
+        let index = sample_index();
+        let path = temp_index_path("query");
+
+        save_to_disk(&index, &path).expect("save should succeed");
+        let loaded = load_from_disk(&path).expect("load should succeed");
+
+        // Name lookup works after rebuild on load
+        let found = loaded.find_package_by_name("VIM");
+        assert_eq!(found.map(|p| p.name.as_str()), Some("vim"));
+
+        // Substring search works against the loaded index
+        let results = search_official(&loaded, "rip", false);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].package.name, "ripgrep");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    /// What: Verify reloading a rewritten index replaces prior data.
+    ///
+    /// Inputs:
+    /// - Two different snapshots written to the same path sequentially.
+    ///
+    /// Output:
+    /// - Second load reflects only the second snapshot's data.
+    ///
+    /// Details:
+    /// - Mirrors Pacsea's reload-replaces-index behavior without global state.
+    fn persist_reload_replaces_previous_data() {
+        use arch_toolkit::index::{OfficialIndex, OfficialPackage, load_from_disk, save_to_disk};
+
+        let path = temp_index_path("reload");
+
+        let first = sample_index();
+        save_to_disk(&first, &path).expect("first save should succeed");
+
+        let mut second = OfficialIndex {
+            pkgs: vec![OfficialPackage {
+                name: "bat".to_string(),
+                repo: "extra".to_string(),
+                arch: "x86_64".to_string(),
+                version: "0.24".to_string(),
+                description: "Cat clone".to_string(),
+            }],
+            name_to_idx: std::collections::HashMap::new(),
+        };
+        second.rebuild_name_index();
+        save_to_disk(&second, &path).expect("second save should succeed");
+
+        let loaded = load_from_disk(&path).expect("load should succeed");
+        assert_eq!(loaded.pkgs.len(), 1);
+        assert!(loaded.find_package_by_name("bat").is_some());
+        assert!(loaded.find_package_by_name("ripgrep").is_none());
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[tokio::test]
+    /// What: Verify the async persistence variants in an integration context.
+    ///
+    /// Inputs:
+    /// - Sample index saved and loaded via `save_to_disk_async`/`load_from_disk_async`.
+    ///
+    /// Output:
+    /// - Loaded index matches the saved data.
+    ///
+    /// Details:
+    /// - Confirms the `spawn_blocking` wrappers work under a tokio runtime.
+    async fn persist_async_roundtrip() {
+        use arch_toolkit::index::{load_from_disk_async, save_to_disk_async};
+
+        let index = sample_index();
+        let path = temp_index_path("async");
+
+        save_to_disk_async(index.clone(), path.clone())
+            .await
+            .expect("async save should succeed");
+        let loaded = load_from_disk_async(path.clone())
+            .await
+            .expect("async load should succeed");
+
+        assert_eq!(loaded.pkgs, index.pkgs);
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    /// What: Verify loading a missing index file surfaces an `Io` error.
+    ///
+    /// Inputs:
+    /// - Non-existent file path.
+    ///
+    /// Output:
+    /// - `Err(ArchToolkitError::Io)` allowing callers to fall back to fetching.
+    ///
+    /// Details:
+    /// - The load-or-fetch pattern from the module docs relies on this behavior.
+    fn persist_load_missing_file_errors() {
+        use arch_toolkit::error::ArchToolkitError;
+        use arch_toolkit::index::load_from_disk;
+
+        let path = temp_index_path("missing");
+        let result = load_from_disk(&path);
+        assert!(matches!(result, Err(ArchToolkitError::Io { .. })));
+    }
 }

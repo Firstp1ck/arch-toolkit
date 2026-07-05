@@ -27,9 +27,16 @@ Complete Rust toolkit for Arch Linux package management. Provides a unified API 
   - Package querying (installed, upgradable, versions)
   - Source determination (official, AUR, local)
 
+- **Package Index Queries** (`index` feature)
+  - Installed package queries (`pacman -Qq`) with optional caching
+  - Explicit package tracking (all explicit or leaf-only packages)
+  - Official repository search (substring and optional fuzzy matching)
+  - Official index fetching (from `pacman -Sl` or the Arch Packages API)
+  - Index persistence (save/load the official index as JSON)
+  - Sync and async APIs (async via `tokio::spawn_blocking`)
+
 ### Planned Features
 
-- Package database queries
 - Installation command building
 - News feeds and security advisories
 - PKGBUILD security analysis
@@ -47,6 +54,8 @@ arch-toolkit = "0.1.2"
 
 - `aur` (default): AUR search, package info, comments, and PKGBUILD fetching
 - `deps`: Dependency parsing from PKGBUILD, .SRCINFO, and pacman output
+- `index`: Package database queries (installed, explicit, official repositories) and index persistence
+- `fuzzy-search`: Fuzzy matching for official index search (used with `index`)
 - `cache-disk`: Enable disk-based caching for persistence across restarts
 
 To disable default features:
@@ -65,6 +74,12 @@ To enable disk caching:
 
 ```toml
 arch-toolkit = { version = "0.1.2", features = ["cache-disk"] }
+```
+
+To enable package index queries:
+
+```toml
+arch-toolkit = { version = "0.2", features = ["index"] }
 ```
 
 ## Quick Start
@@ -320,6 +335,36 @@ if is_system_package("glibc") {
 }
 ```
 
+### Package Index Queries
+
+Query installed packages and search official repositories (requires `index` feature):
+
+```rust
+use arch_toolkit::index::{
+    fetch_official_index, get_installed_packages, is_installed, load_from_disk, save_to_disk,
+    search_official,
+};
+use std::path::Path;
+
+// Query installed packages
+let installed = get_installed_packages()?;
+if is_installed("vim", Some(&installed)) {
+    println!("vim is installed");
+}
+
+// Load a cached official index, falling back to a fresh fetch
+let path = Path::new("official_index.json");
+let index = load_from_disk(path).or_else(|_| fetch_official_index())?;
+
+// Search the official index
+for result in search_official(&index, "ripgrep", false) {
+    println!("{}/{} {}", result.package.repo, result.package.name, result.package.version);
+}
+
+// Persist the index for the next session
+save_to_disk(&index, path)?;
+```
+
 ### Health Checks
 
 Monitor AUR service status:
@@ -350,6 +395,7 @@ See the `examples/` directory for comprehensive examples:
 - `examples/reverse_example.rs`: Reverse dependency analysis examples
 - `examples/source_example.rs`: Source determination examples
 - `examples/version_example.rs`: Version comparison examples
+- `examples/index_example.rs`: Package index queries and persistence examples
 
 Run examples with:
 
@@ -367,6 +413,7 @@ cargo run --example resolve_example --features deps
 cargo run --example reverse_example --features deps
 cargo run --example source_example --features deps
 cargo run --example version_example --features deps
+cargo run --example index_example --features index
 ```
 
 ## API Documentation

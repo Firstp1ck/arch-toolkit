@@ -13,7 +13,7 @@ This document provides a detailed structured plan for implementing the Index Mod
 | **Estimated Effort** | 20-30 hours |
 | **Complexity** | Medium (system command execution, data persistence, async operations) |
 | **Dependencies** | `types` module, optional `aur` module for enrichment |
-| **Status** | 🚧 In Progress - Tasks 3.1, 3.2, and 3.3 complete |
+| **Status** | ✅ Core Complete - Tasks 3.1, 3.2, 3.3, 3.4, 3.7, 3.8 complete; optional Tasks 3.5, 3.6 pending |
 
 ## Overview
 
@@ -230,12 +230,20 @@ This module is foundational and used by other modules (deps, install) for packag
 
 **Estimated Effort**: 2-3 hours
 
+**Status**: ✅ Complete
+
 **Acceptance Criteria**:
-- [ ] Load/save works correctly
-- [ ] Name index rebuilt after load
-- [ ] Handles file errors gracefully
-- [ ] Unit tests for persistence
-- [ ] Code passes quality checks
+- [x] Load/save works correctly (`load_from_disk`, `save_to_disk` + async variants)
+- [x] Name index rebuilt after load
+- [x] Handles file errors gracefully (new `ArchToolkitError::Io` variant with path context; errors propagated instead of silently ignored)
+- [x] Unit tests for persistence (8 unit tests in `src/index/persist.rs`)
+- [x] Code passes quality checks
+
+**Implementation Notes**:
+- Created `src/index/persist.rs` with `load_from_disk()`, `save_to_disk()`, `load_from_disk_async()`, `save_to_disk_async()`
+- Unlike Pacsea's original (which used global state and swallowed errors), functions take/return `OfficialIndex` explicitly and propagate errors, enabling the `load_from_disk(path).or_else(|_| fetch_official_index())` pattern
+- `save_to_disk()` creates parent directories and warns when saving an empty index
+- Added `ArchToolkitError::Io { path, source }` variant and `ArchToolkitError::io()` constructor
 
 ---
 
@@ -313,13 +321,15 @@ This module is foundational and used by other modules (deps, install) for packag
 
 **Estimated Effort**: 1-2 hours
 
+**Status**: ✅ Complete
+
 **Acceptance Criteria**:
 - [x] All public APIs exported (for installed/explicit/query/fetch modules)
 - [x] Comprehensive module documentation
 - [x] Usage examples in rustdoc
 - [x] Feature flags documented
 - [x] Code passes quality checks
-- [ ] Additional exports for persist module (pending)
+- [x] Additional exports for persist module (load/save + async variants, module doc example, prelude exports)
 
 ---
 
@@ -338,11 +348,11 @@ This module is foundational and used by other modules (deps, install) for packag
 **Estimated Effort**: 3-4 hours
 
 **Acceptance Criteria**:
-- [x] All functions have unit tests (for installed/explicit/query/fetch modules)
-- [x] Error cases covered (for installed/explicit/query/fetch modules)
-- [x] Edge cases covered (for installed/explicit/query/fetch modules)
-- [x] Tests pass with `cargo test -- --test-threads=1` (for completed modules)
-- [ ] Additional tests for persist module (pending)
+- [x] All functions have unit tests (for installed/explicit/query/fetch/persist modules)
+- [x] Error cases covered (for installed/explicit/query/fetch/persist modules)
+- [x] Edge cases covered (for installed/explicit/query/fetch/persist modules)
+- [x] Tests pass with `cargo test -- --test-threads=1` (for all modules)
+- [x] Additional tests for persist module (8 unit tests: roundtrip, missing file, invalid JSON, parent dir creation, empty index, skipped name index, async variants)
 
 #### Task 3.8.2: Integration Tests
 
@@ -357,10 +367,10 @@ This module is foundational and used by other modules (deps, install) for packag
 **Estimated Effort**: 2-3 hours
 
 **Acceptance Criteria**:
-- [x] Integration tests cover main workflows (for installed/explicit modules)
+- [x] Integration tests cover main workflows (for installed/explicit/persist modules)
 - [x] Tests use mock commands where possible (mock pacman scripts)
-- [x] Tests pass with `cargo test -- --test-threads=1` (for completed modules)
-- [ ] Additional integration tests for persist module (pending)
+- [x] Tests pass with `cargo test -- --test-threads=1` (for all modules)
+- [x] Additional integration tests for persist module (4 tests in `tests/index_integration.rs`: save→load→search workflow, reload replaces data, async roundtrip, missing file error)
 
 #### Task 3.8.3: Documentation and Examples
 
@@ -372,11 +382,13 @@ This module is foundational and used by other modules (deps, install) for packag
 
 **Estimated Effort**: 2-3 hours
 
+**Status**: ✅ Complete
+
 **Acceptance Criteria**:
-- [ ] All public APIs have rustdoc examples
-- [ ] Example program demonstrates usage
-- [ ] README updated
-- [ ] Feature flags documented
+- [x] All public APIs have rustdoc examples
+- [x] Example program demonstrates usage (`examples/index_example.rs` - installed queries, explicit tracking, official search, fetching, persistence)
+- [x] README updated (index feature documented in Features, Feature Flags, usage section, and Examples)
+- [x] Feature flags documented (`index`, `fuzzy-search`)
 
 ---
 
@@ -480,15 +492,17 @@ The Index Module is complete when:
 - [x] Installed package queries ported (Task 3.2)
 - [x] Explicit package tracking ported (Task 3.2)
 - [x] Official repository queries ported (Task 3.3)
-- [ ] Index persistence ported (Task 3.4)
-- [x] No dependencies on Pacsea internals (for completed tasks)
-- [x] All functions have rustdoc documentation (for completed tasks)
-- [x] Unit tests pass (for completed tasks)
-- [x] Integration tests pass (for completed tasks)
-- [ ] Example program works
-- [x] Code passes `cargo fmt`, `cargo clippy`, `cargo check` (for completed tasks)
-- [ ] README updated with index module documentation
-- [x] Module entry point created (Task 3.7 - partial, installed/explicit modules complete)
+- [x] Index persistence ported (Task 3.4)
+- [x] No dependencies on Pacsea internals
+- [x] All functions have rustdoc documentation
+- [x] Unit tests pass
+- [x] Integration tests pass
+- [x] Example program works (`examples/index_example.rs` verified against live system: fetched, searched, saved, and reloaded 15,397 packages)
+- [x] Code passes `cargo fmt`, `cargo clippy`, `cargo check`
+- [x] README updated with index module documentation
+- [x] Module entry point created (Task 3.7 - all modules exported including persist)
+
+**Remaining (optional)**: Task 3.5 (Mirror Management, Windows-specific) and Task 3.6 (Background Updates) are optional and not required for module completion.
 
 ---
 
@@ -499,11 +513,11 @@ The Index Module is complete when:
 | 3.1: Define Types | 2-3 | High | ✅ Complete |
 | 3.2: Installed Queries | 4-6 | High | ✅ Complete |
 | 3.3: Official Queries | 7-9 | High | ✅ Complete |
-| 3.4: Persistence | 2-3 | High |
-| 3.5: Mirror Management | 2-3 | Medium (Optional) |
-| 3.6: Background Updates | 2-3 | Low (Optional) |
-| 3.7: Module Entry Point | 1-2 | High | ✅ Partial (installed/explicit/query/fetch complete) |
-| 3.8: Testing & Docs | 7-10 | High | ✅ Partial (installed/explicit/query/fetch complete) |
+| 3.4: Persistence | 2-3 | High | ✅ Complete |
+| 3.5: Mirror Management | 2-3 | Medium (Optional) | ⏳ Pending |
+| 3.6: Background Updates | 2-3 | Low (Optional) | ⏳ Pending |
+| 3.7: Module Entry Point | 1-2 | High | ✅ Complete |
+| 3.8: Testing & Docs | 7-10 | High | ✅ Complete |
 | **Total** | **27-39 hours** | |
 
 **Recommended Approach**: Start with high-priority tasks (3.1-3.4, 3.7-3.8), then add optional features (3.5-3.6) as needed.

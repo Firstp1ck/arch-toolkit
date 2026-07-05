@@ -18,6 +18,7 @@
 //! ## Basic AUR Search
 //!
 //! ```no_run
+//! # #[cfg(feature = "aur")] mod wrap {
 //! use arch_toolkit::ArchClient;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
@@ -26,11 +27,13 @@
 //! println!("Found {} packages", packages.len());
 //! # Ok(())
 //! # }
+//! # }
 //! ```
 //!
 //! ## Fetch Package Details
 //!
 //! ```no_run
+//! # #[cfg(feature = "aur")] mod wrap {
 //! use arch_toolkit::ArchClient;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
@@ -41,11 +44,13 @@
 //! }
 //! # Ok(())
 //! # }
+//! # }
 //! ```
 //!
 //! ## Custom Configuration
 //!
 //! ```no_run
+//! # #[cfg(feature = "aur")] mod wrap {
 //! use arch_toolkit::ArchClient;
 //! use std::time::Duration;
 //!
@@ -57,11 +62,13 @@
 //! let packages = client.aur().search("yay").await?;
 //! # Ok(())
 //! # }
+//! # }
 //! ```
 //!
 //! ## Fetch Comments
 //!
 //! ```no_run
+//! # #[cfg(feature = "aur")] mod wrap {
 //! use arch_toolkit::ArchClient;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
@@ -72,11 +79,13 @@
 //! }
 //! # Ok(())
 //! # }
+//! # }
 //! ```
 //!
 //! ## Fetch PKGBUILD
 //!
 //! ```no_run
+//! # #[cfg(feature = "aur")] mod wrap {
 //! use arch_toolkit::ArchClient;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
@@ -84,6 +93,7 @@
 //! let pkgbuild = client.aur().pkgbuild("yay").await?;
 //! println!("PKGBUILD:\n{}", pkgbuild);
 //! # Ok(())
+//! # }
 //! # }
 //! ```
 //!
@@ -159,12 +169,14 @@ pub mod index;
 /// # Example
 ///
 /// ```no_run
+/// # #[cfg(feature = "aur")] mod wrap {
 /// use arch_toolkit::prelude::*;
 ///
 /// # async fn example() -> Result<()> {
 /// let client = ArchClient::new()?;
 /// let packages: Vec<AurPackage> = client.aur().search("yay").await?;
 /// Ok(())
+/// # }
 /// # }
 /// ```
 pub mod prelude;

@@ -30,7 +30,7 @@ async fn main() -> Result<()> {
 
     let cache_config = CacheConfigBuilder::new()
         .enable_search(true)
-        .search_ttl(Duration::from_secs(300)) // 5 minutes
+        .search_ttl(Duration::from_mins(5)) // 5 minutes
         .build();
 
     let client = ArchClient::builder().cache_config(cache_config).build()?;
@@ -72,11 +72,11 @@ async fn main() -> Result<()> {
 
     let cache_config = CacheConfigBuilder::new()
         .enable_search(true)
-        .search_ttl(Duration::from_secs(300)) // 5 minutes
+        .search_ttl(Duration::from_mins(5)) // 5 minutes
         .enable_info(true)
-        .info_ttl(Duration::from_secs(900)) // 15 minutes
+        .info_ttl(Duration::from_mins(15)) // 15 minutes
         .enable_comments(true)
-        .comments_ttl(Duration::from_secs(600)) // 10 minutes
+        .comments_ttl(Duration::from_mins(10)) // 10 minutes
         .memory_cache_size(200) // Increase cache size
         .build();
 
@@ -116,9 +116,9 @@ async fn main() -> Result<()> {
 
         let cache_config = CacheConfigBuilder::new()
             .enable_search(true)
-            .search_ttl(Duration::from_secs(300))
+            .search_ttl(Duration::from_mins(5))
             .enable_pkgbuild(true)
-            .pkgbuild_ttl(Duration::from_secs(3600)) // 1 hour
+            .pkgbuild_ttl(Duration::from_hours(1)) // 1 hour
             .enable_disk_cache(true) // Enable disk cache
             .memory_cache_size(100)
             .build();
@@ -157,11 +157,11 @@ async fn main() -> Result<()> {
 
     let cache_config = CacheConfigBuilder::new()
         .enable_search(true)
-        .search_ttl(Duration::from_secs(60)) // Short TTL: 1 minute
+        .search_ttl(Duration::from_mins(1)) // Short TTL: 1 minute
         .enable_info(true)
-        .info_ttl(Duration::from_secs(1800)) // Longer TTL: 30 minutes
+        .info_ttl(Duration::from_mins(30)) // Longer TTL: 30 minutes
         .enable_pkgbuild(true)
-        .pkgbuild_ttl(Duration::from_secs(7200)) // Very long TTL: 2 hours
+        .pkgbuild_ttl(Duration::from_hours(2)) // Very long TTL: 2 hours
         .memory_cache_size(50) // Smaller cache
         .build();
 
@@ -190,7 +190,7 @@ async fn main() -> Result<()> {
     // With cache (first request)
     let cache_config = CacheConfigBuilder::new()
         .enable_search(true)
-        .search_ttl(Duration::from_secs(300))
+        .search_ttl(Duration::from_mins(5))
         .build();
     let cache_client = ArchClient::builder().cache_config(cache_config).build()?;
 

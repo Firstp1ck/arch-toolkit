@@ -72,7 +72,7 @@ async fn main() -> Result<()> {
     println!("└──────────────────────────────────────────────────────────────┘");
 
     let custom_client = ArchClient::builder()
-        .timeout(Duration::from_secs(60))
+        .timeout(Duration::from_mins(1))
         .user_agent("my-arch-tool/1.0")
         .build()?;
     println!("✓ Custom client created with 60s timeout\n");

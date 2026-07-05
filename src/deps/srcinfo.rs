@@ -66,25 +66,17 @@ pub fn parse_srcinfo_deps(srcinfo: &str) -> (Vec<String>, Vec<String>, Vec<Strin
                 .map_or(key, |underscore_pos| &key[..underscore_pos]);
 
             match base_key {
-                "depends" => {
-                    if seen_depends.insert(value.to_string()) {
-                        depends.push(value.to_string());
-                    }
+                "depends" if seen_depends.insert(value.to_string()) => {
+                    depends.push(value.to_string());
                 }
-                "makedepends" => {
-                    if seen_makedepends.insert(value.to_string()) {
-                        makedepends.push(value.to_string());
-                    }
+                "makedepends" if seen_makedepends.insert(value.to_string()) => {
+                    makedepends.push(value.to_string());
                 }
-                "checkdepends" => {
-                    if seen_checkdepends.insert(value.to_string()) {
-                        checkdepends.push(value.to_string());
-                    }
+                "checkdepends" if seen_checkdepends.insert(value.to_string()) => {
+                    checkdepends.push(value.to_string());
                 }
-                "optdepends" => {
-                    if seen_optdepends.insert(value.to_string()) {
-                        optdepends.push(value.to_string());
-                    }
+                "optdepends" if seen_optdepends.insert(value.to_string()) => {
+                    optdepends.push(value.to_string());
                 }
                 _ => {}
             }
@@ -198,38 +190,32 @@ pub fn parse_srcinfo(content: &str) -> SrcinfoData {
                 .map_or(key, |underscore_pos| &key[..underscore_pos]);
 
             match base_key {
-                "pkgbase" => {
-                    if data.pkgbase.is_empty() {
+                "pkgbase"
+                    if data.pkgbase.is_empty() => {
                         data.pkgbase = value.to_string();
                     }
-                }
-                "pkgname" => {
+                "pkgname"
                     // For split packages, use the first pkgname found
-                    if !pkgname_found {
+                    if !pkgname_found => {
                         data.pkgname = value.to_string();
                         pkgname_found = true;
                     }
-                }
-                "pkgver" => {
-                    if data.pkgver.is_empty() {
+                "pkgver"
+                    if data.pkgver.is_empty() => {
                         data.pkgver = value.to_string();
                     }
-                }
-                "pkgrel" => {
-                    if data.pkgrel.is_empty() {
+                "pkgrel"
+                    if data.pkgrel.is_empty() => {
                         data.pkgrel = value.to_string();
                     }
-                }
-                "provides" => {
-                    if seen_provides.insert(value.to_string()) {
+                "provides"
+                    if seen_provides.insert(value.to_string()) => {
                         data.provides.push(value.to_string());
                     }
-                }
-                "replaces" => {
-                    if seen_replaces.insert(value.to_string()) {
+                "replaces"
+                    if seen_replaces.insert(value.to_string()) => {
                         data.replaces.push(value.to_string());
                     }
-                }
                 _ => {}
             }
         }

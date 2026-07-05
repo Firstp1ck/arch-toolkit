@@ -53,6 +53,36 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 wiremock = "0.6"
 tempfile = "3.10"
 
+# Examples that use the AUR client directly and cannot compile without it
+[[example]]
+name = "aur_example"
+required-features = ["aur"]
+
+[[example]]
+name = "env_config"
+required-features = ["aur"]
+
+[[example]]
+name = "health_check"
+required-features = ["aur"]
+
+[[example]]
+name = "mock_testing"
+required-features = ["aur"]
+
+[[example]]
+name = "rich_error_context"
+required-features = ["aur"]
+
+[[example]]
+name = "with_caching"
+required-features = ["aur"]
+
+# Integration tests that exercise the AUR caching layer
+[[test]]
+name = "cache_integration"
+required-features = ["aur"]
+
 [package.metadata.docs.rs]
 all-features = true
 

@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
 
     // Set a timeout in code
     let _client = ArchClient::builder()
-        .timeout(Duration::from_secs(60))
+        .timeout(Duration::from_mins(1))
         .with_env() // Environment variables override the 60s timeout if ARCH_TOOLKIT_TIMEOUT is set
         .build()?;
     println!("✓ Client created with code defaults + environment overrides\n");

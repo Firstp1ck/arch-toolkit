@@ -296,7 +296,7 @@ impl CacheWrapper {
                 &self.memory,
                 &key_str,
                 &value,
-                Duration::from_secs(300),
+                Duration::from_mins(5),
             );
             return Some(value);
         }

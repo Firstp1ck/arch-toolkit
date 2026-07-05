@@ -206,7 +206,7 @@ mod tests {
             std::env::set_var("ARCH_TOOLKIT_TIMEOUT", "60");
         }
         let result = env_timeout();
-        assert_eq!(result, Some(Duration::from_secs(60)));
+        assert_eq!(result, Some(Duration::from_mins(1)));
         unsafe {
             std::env::remove_var("ARCH_TOOLKIT_TIMEOUT");
         }

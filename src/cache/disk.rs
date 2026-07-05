@@ -337,7 +337,7 @@ mod tests {
         assert!(<DiskCache as Cache<String, String>>::get(&cache, &key).is_none());
 
         // Set value
-        <DiskCache as Cache<String, String>>::set(&cache, &key, &value, Duration::from_secs(60))
+        <DiskCache as Cache<String, String>>::set(&cache, &key, &value, Duration::from_mins(1))
             .unwrap();
 
         // Get value
@@ -353,7 +353,7 @@ mod tests {
         let key = "test_key".to_string();
         let value = "test_value".to_string();
 
-        <DiskCache as Cache<String, String>>::set(&cache, &key, &value, Duration::from_secs(60))
+        <DiskCache as Cache<String, String>>::set(&cache, &key, &value, Duration::from_mins(1))
             .unwrap();
         assert!(<DiskCache as Cache<String, String>>::get(&cache, &key).is_some());
 
@@ -372,14 +372,14 @@ mod tests {
             &cache,
             &"key1".to_string(),
             &value,
-            Duration::from_secs(60),
+            Duration::from_mins(1),
         )
         .unwrap();
         <DiskCache as Cache<String, String>>::set(
             &cache,
             &"key2".to_string(),
             &value,
-            Duration::from_secs(60),
+            Duration::from_mins(1),
         )
         .unwrap();
 

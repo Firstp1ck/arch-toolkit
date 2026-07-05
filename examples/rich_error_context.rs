@@ -481,6 +481,7 @@ const fn categorize_error(error: &ArchToolkitError) -> &'static str {
         | ArchToolkitError::PkgbuildFailed { .. }
         | ArchToolkitError::Network(_) => "Network Error",
         ArchToolkitError::Json(_) | ArchToolkitError::Parse(_) => "Parsing Error",
+        ArchToolkitError::Io { .. } => "I/O Error",
         ArchToolkitError::RateLimited { .. } => "Rate Limit Error",
         ArchToolkitError::PackageNotFound { .. } => "Not Found Error",
         ArchToolkitError::InvalidInput(_) => "Input Error",

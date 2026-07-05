@@ -133,10 +133,27 @@
 //! println!("Found {} official packages", all_packages.len());
 //! # Ok::<(), arch_toolkit::error::ArchToolkitError>(())
 //! ```
+//!
+//! ## Persist the Index to Disk
+//!
+//! ```no_run
+//! use arch_toolkit::index::{fetch_official_index, load_from_disk, save_to_disk};
+//! use std::path::Path;
+//!
+//! let path = Path::new("official_index.json");
+//!
+//! // Load a cached index, falling back to a fresh fetch
+//! let index = load_from_disk(path).or_else(|_| fetch_official_index())?;
+//!
+//! // Save the index for the next session
+//! save_to_disk(&index, path)?;
+//! # Ok::<(), arch_toolkit::error::ArchToolkitError>(())
+//! ```
 
 mod explicit;
 mod fetch;
 mod installed;
+mod persist;
 mod query;
 
 // Re-export types from types module
@@ -158,3 +175,8 @@ pub use query::{all_official, search_official};
 // Re-export fetch functions
 #[cfg(feature = "index")]
 pub use fetch::{fetch_official_index, fetch_official_index_async};
+
+// Re-export persist functions
+pub use persist::{load_from_disk, save_to_disk};
+#[cfg(feature = "index")]
+pub use persist::{load_from_disk_async, save_to_disk_async};

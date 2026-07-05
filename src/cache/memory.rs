@@ -234,7 +234,7 @@ mod tests {
             &cache,
             &key,
             &value,
-            StdDuration::from_secs(60),
+            StdDuration::from_mins(1),
         )
         .unwrap();
 
@@ -284,14 +284,14 @@ mod tests {
             &cache,
             &"key1".to_string(),
             &value1,
-            StdDuration::from_secs(60),
+            StdDuration::from_mins(1),
         )
         .unwrap();
         <MemoryCache as Cache<String, String>>::set(
             &cache,
             &"key2".to_string(),
             &value2,
-            StdDuration::from_secs(60),
+            StdDuration::from_mins(1),
         )
         .unwrap();
 
@@ -303,7 +303,7 @@ mod tests {
             &cache,
             &"key3".to_string(),
             &value3,
-            StdDuration::from_secs(60),
+            StdDuration::from_mins(1),
         )
         .unwrap();
 
@@ -325,7 +325,7 @@ mod tests {
             &cache,
             &key,
             &value,
-            StdDuration::from_secs(60),
+            StdDuration::from_mins(1),
         )
         .unwrap();
         assert!(<MemoryCache as Cache<String, String>>::get(&cache, &key).is_some());
@@ -345,14 +345,14 @@ mod tests {
             &cache,
             &"key1".to_string(),
             &value,
-            StdDuration::from_secs(60),
+            StdDuration::from_mins(1),
         )
         .unwrap();
         <MemoryCache as Cache<String, String>>::set(
             &cache,
             &"key2".to_string(),
             &value,
-            StdDuration::from_secs(60),
+            StdDuration::from_mins(1),
         )
         .unwrap();
 
@@ -380,7 +380,7 @@ mod tests {
                         &cache_clone,
                         &key,
                         &value,
-                        StdDuration::from_secs(60),
+                        StdDuration::from_mins(1),
                     )
                     .unwrap();
                 }

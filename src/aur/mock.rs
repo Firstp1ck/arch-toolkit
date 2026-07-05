@@ -78,6 +78,9 @@ impl MockAurApi {
                     ArchToolkitError::Parse(format!("Mock pkgbuild error for package: {package}"))
                 }
                 ArchToolkitError::Json(_) => ArchToolkitError::Parse("Mock JSON error".to_string()),
+                ArchToolkitError::Io { path, .. } => {
+                    ArchToolkitError::Parse(format!("Mock I/O error at path: {path}"))
+                }
                 ArchToolkitError::Parse(s) => ArchToolkitError::Parse(s.clone()),
                 ArchToolkitError::RateLimited { retry_after } => ArchToolkitError::RateLimited {
                     retry_after: *retry_after,

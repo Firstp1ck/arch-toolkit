@@ -48,15 +48,17 @@ This document analyzes framework-agnostic modules in Pacsea (`src/sources/`, `sr
   - ⏳ AUR dependency queries (async .SRCINFO fetching limitation noted - future enhancement)
   - **Detailed Plan**: [DEPENDENCIES_MODULE_PHASE.md](./DEPENDENCIES_MODULE_PHASE.md)
 
-**Phase 3 - Index Module: 🚧 IN PROGRESS**
+**Phase 3 - Index Module: ✅ CORE COMPLETE (2026-07-05)**
 
 - Index module (package database queries)
   - ✅ Installed package queries (Task 3.2.1 - complete)
   - ✅ Explicit package tracking (Task 3.2.2 - complete)
   - ✅ Index types (Task 3.1.1 - complete)
   - ✅ Official repository queries (Task 3.3 - complete)
+  - ✅ Index persistence (Task 3.4 - complete)
+  - ✅ Module entry point, tests, example, README docs (Tasks 3.7, 3.8 - complete)
   - ⏳ Mirror management (Task 3.5 - optional, pending)
-  - ⏳ Index persistence (Task 3.4 - pending)
+  - ⏳ Background updates (Task 3.6 - optional, pending)
 
 **Phase 4+ - Remaining Modules: ⏳ PLANNED**
 
@@ -100,8 +102,8 @@ Before proceeding, here's a comprehensive analysis of what already exists in the
 
 **No unified library crate exists** that combines:
 - ✅ AUR operations (search, info, comments, PKGBUILD)
-- 🚧 Dependency parsing (SRCINFO parsing ✅, tree building ⏳)
-- ⏳ Package index queries (installed, official repos)
+- ✅ Dependency parsing and resolution (SRCINFO, PKGBUILD, resolver, reverse deps)
+- ✅ Package index queries (installed, official repos, persistence)
 - ⏳ Installation command building
 - ⏳ News feeds and advisories
 - ⏳ PKGBUILD security analysis
@@ -688,7 +690,7 @@ arch-toolkit/
 - [x] **Port installed package queries** - From `src/index/installed.rs` (Task 3.2.1 - complete)
 - [x] **Port explicit package tracking** - From `src/index/explicit.rs` (Task 3.2.2 - complete)
 - [x] **Port official repo queries** - From `src/index/query.rs` (Task 3.3 - complete)
-- [ ] **Port index persistence** - From `src/index/persist.rs` (Task 3.4 - pending)
+- [x] **Port index persistence** - From `src/index/persist.rs` (Task 3.4 - complete: `load_from_disk`/`save_to_disk` + async variants, error propagation via new `ArchToolkitError::Io` variant)
 - [ ] **Port mirror management** - From `src/index/mirrors.rs` (Task 3.5 - optional, Windows-specific, pending)
 - [x] **Remove Pacsea-specific caching** - Let callers handle persistence (for completed tasks)
 - **Detailed Plan**: [INDEX_MODULE_PHASE.md](./INDEX_MODULE_PHASE.md)
@@ -989,19 +991,22 @@ The Dependencies Module is complete in v0.1.2:
    - ✅ Module entry point
    - **Plan Document**: [DEPENDENCIES_MODULE_PHASE.md](./DEPENDENCIES_MODULE_PHASE.md)
 
-### Phase 3 Status: 🚧 IN PROGRESS
+### Phase 3 Status: ✅ CORE COMPLETE (2026-07-05)
 
-The Index Module is partially complete:
+The Index Module core functionality is complete:
 
-1. **Index Module** - 🚧 In Progress
+1. **Index Module** - ✅ Core Complete
    - ✅ Index types (`OfficialPackage`, `OfficialIndex`, `IndexQueryResult`, `InstalledPackagesMode`) - Task 3.1.1 complete
    - ✅ Installed package queries (`refresh_installed_cache`, `is_installed`, `get_installed_packages`) - Task 3.2.1 complete
    - ✅ Explicit package tracking (`refresh_explicit_cache`, `is_explicit`) - Task 3.2.2 complete
    - ✅ Official repo queries (`search_official`, `all_official`, `fetch_official_index`, `fetch_official_index_async`) - Task 3.3 complete
-   - ✅ Module entry point updated with query/fetch modules - Task 3.7 partial
-   - ⏳ Index persistence (Task 3.4 - pending)
-   - ⏳ Mirror management (Task 3.5 - optional, pending)
+   - ✅ Index persistence (`load_from_disk`, `save_to_disk`, `load_from_disk_async`, `save_to_disk_async`) - Task 3.4 complete
+   - ✅ Module entry point with all modules exported, prelude exports - Task 3.7 complete
+   - ✅ Unit + integration tests, `examples/index_example.rs`, README documentation - Task 3.8 complete
+   - ⏳ Mirror management (Task 3.5 - optional, Windows-specific, pending)
+   - ⏳ Background updates (Task 3.6 - optional, pending)
    - **Plan Document**: [INDEX_MODULE_PHASE.md](./INDEX_MODULE_PHASE.md)
+   - **Next**: Publish v0.2.0, then start Phase 4 (install module)
 
 ### Phase 4+ Status: ⏳ PLANNED
 
@@ -1031,14 +1036,16 @@ These modules may still have blockers similar to what the AUR module had:
    - **Remaining**: AUR dependency queries (async .SRCINFO fetching limitation noted - future enhancement)
    - **Plan Document**: [DEPENDENCIES_MODULE_PHASE.md](./DEPENDENCIES_MODULE_PHASE.md)
 
-3. **Phase 3**: Add index module (~20-30 hours) 🚧 **IN PROGRESS**
+3. **Phase 3**: Add index module (~20-30 hours) ✅ **CORE COMPLETE**
    - ✅ Index types (Task 3.1.1 - complete)
    - ✅ Installed package queries (Task 3.2.1 - complete)
    - ✅ Explicit package tracking (Task 3.2.2 - complete)
    - ✅ Official repository queries (Task 3.3 - complete)
-   - ⏳ Index persistence (Task 3.4 - pending)
+   - ✅ Index persistence (Task 3.4 - complete)
+   - ✅ Module entry point, tests, example, README docs (Tasks 3.7, 3.8 - complete)
    - ⏳ Mirror management (Task 3.5 - optional, pending)
-   - **Status**: Tasks 3.1, 3.2, and 3.3 complete, remaining tasks pending
+   - ⏳ Background updates (Task 3.6 - optional, pending)
+   - **Status**: All required tasks complete (2026-07-05); ready for v0.2.0 release
    - **Plan Document**: [INDEX_MODULE_PHASE.md](./INDEX_MODULE_PHASE.md)
 
 4. **Phase 4+**: Add remaining modules incrementally ⏳ **PLANNED**

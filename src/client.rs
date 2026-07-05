@@ -1279,7 +1279,7 @@ mod tests {
     #[test]
     fn test_arch_client_builder_custom_timeout() {
         let client = ArchClient::builder()
-            .timeout(Duration::from_secs(60))
+            .timeout(Duration::from_mins(1))
             .build();
         assert!(
             client.is_ok(),
@@ -1454,7 +1454,7 @@ mod tests {
             "ArchClientBuilder::from_env() with timeout should succeed"
         );
         let client = client.expect("client creation should succeed");
-        assert_eq!(client.timeout, Duration::from_secs(60));
+        assert_eq!(client.timeout, Duration::from_mins(1));
         unsafe {
             std::env::remove_var("ARCH_TOOLKIT_TIMEOUT");
         }
@@ -1650,7 +1650,7 @@ mod tests {
             "ArchClientBuilder::with_env() should override code values"
         );
         let client = client.expect("client creation should succeed");
-        assert_eq!(client.timeout, Duration::from_secs(60));
+        assert_eq!(client.timeout, Duration::from_mins(1));
         assert_eq!(client.user_agent, "env-agent/1.0");
         unsafe {
             std::env::remove_var("ARCH_TOOLKIT_TIMEOUT");

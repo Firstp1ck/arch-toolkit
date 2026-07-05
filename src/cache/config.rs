@@ -43,13 +43,13 @@ impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             enable_search: false,
-            search_ttl: Duration::from_secs(300), // 5 minutes
+            search_ttl: Duration::from_mins(5), // 5 minutes
             enable_info: false,
-            info_ttl: Duration::from_secs(900), // 15 minutes
+            info_ttl: Duration::from_mins(15), // 15 minutes
             enable_comments: false,
-            comments_ttl: Duration::from_secs(600), // 10 minutes
+            comments_ttl: Duration::from_mins(10), // 10 minutes
             enable_pkgbuild: false,
-            pkgbuild_ttl: Duration::from_secs(3600), // 1 hour
+            pkgbuild_ttl: Duration::from_hours(1), // 1 hour
             memory_cache_size: 100,
             enable_disk_cache: false,
         }
@@ -298,27 +298,27 @@ mod tests {
         assert!(!config.enable_pkgbuild);
         assert!(!config.enable_disk_cache);
         assert_eq!(config.memory_cache_size, 100);
-        assert_eq!(config.search_ttl, Duration::from_secs(300));
-        assert_eq!(config.info_ttl, Duration::from_secs(900));
-        assert_eq!(config.comments_ttl, Duration::from_secs(600));
-        assert_eq!(config.pkgbuild_ttl, Duration::from_secs(3600));
+        assert_eq!(config.search_ttl, Duration::from_mins(5));
+        assert_eq!(config.info_ttl, Duration::from_mins(15));
+        assert_eq!(config.comments_ttl, Duration::from_mins(10));
+        assert_eq!(config.pkgbuild_ttl, Duration::from_hours(1));
     }
 
     #[test]
     fn test_cache_config_builder() {
         let config = CacheConfigBuilder::new()
             .enable_search(true)
-            .search_ttl(Duration::from_secs(600))
+            .search_ttl(Duration::from_mins(10))
             .enable_info(true)
-            .info_ttl(Duration::from_secs(1800))
+            .info_ttl(Duration::from_mins(30))
             .memory_cache_size(200)
             .enable_disk_cache(true)
             .build();
 
         assert!(config.enable_search);
         assert!(config.enable_info);
-        assert_eq!(config.search_ttl, Duration::from_secs(600));
-        assert_eq!(config.info_ttl, Duration::from_secs(1800));
+        assert_eq!(config.search_ttl, Duration::from_mins(10));
+        assert_eq!(config.info_ttl, Duration::from_mins(30));
         assert_eq!(config.memory_cache_size, 200);
         assert!(config.enable_disk_cache);
     }

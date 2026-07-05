@@ -134,14 +134,13 @@ fn fetch_via_pacman() -> Result<OfficialIndex> {
             .stderr(Stdio::piped())
             .output()
             .map_err(|e| {
-                ArchToolkitError::Parse(format!("Failed to execute pacman -Sl {}: {}", repo, e))
+                ArchToolkitError::Parse(format!("Failed to execute pacman -Sl {repo}: {e}"))
             })?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(ArchToolkitError::Parse(format!(
-                "pacman -Sl {} failed: {}",
-                repo, stderr
+                "pacman -Sl {repo} failed: {stderr}"
             )));
         }
 
@@ -221,8 +220,7 @@ async fn fetch_via_api(client: &ArchClient) -> Result<OfficialIndex> {
 
             while has_more {
                 let url = format!(
-                    "https://archlinux.org/packages/search/json/?repo={}&arch={}&limit={}&page={}",
-                    repo, arch, limit, page
+                    "https://archlinux.org/packages/search/json/?repo={repo}&arch={arch}&limit={limit}&page={page}"
                 );
 
                 tracing::debug!(
@@ -237,21 +235,19 @@ async fn fetch_via_api(client: &ArchClient) -> Result<OfficialIndex> {
 
                 let response = client.http_client().get(&url).send().await.map_err(|e| {
                     ArchToolkitError::Parse(format!(
-                        "Failed to fetch packages from API (repo={}, arch={}, page={}): {}",
-                        repo, arch, page, e
+                        "Failed to fetch packages from API (repo={repo}, arch={arch}, page={page}): {e}"
                     ))
                 })?;
 
                 let status = response.status();
                 if !status.is_success() {
                     return Err(ArchToolkitError::Parse(format!(
-                        "API returned error status {} for repo={}, arch={}, page={}",
-                        status, repo, arch, page
+                        "API returned error status {status} for repo={repo}, arch={arch}, page={page}"
                     )));
                 }
 
                 let json: serde_json::Value = response.json().await.map_err(|e| {
-                    ArchToolkitError::Parse(format!("Failed to parse JSON response: {}", e))
+                    ArchToolkitError::Parse(format!("Failed to parse JSON response: {e}"))
                 })?;
 
                 // Parse results array
@@ -260,8 +256,7 @@ async fn fetch_via_api(client: &ArchClient) -> Result<OfficialIndex> {
                     .and_then(|v| v.as_array())
                     .ok_or_else(|| {
                         ArchToolkitError::Parse(format!(
-                            "Invalid API response: missing 'results' array for repo={}, arch={}, page={}",
-                            repo, arch, page
+                            "Invalid API response: missing 'results' array for repo={repo}, arch={arch}, page={page}"
                         ))
                     })?;
 
@@ -271,9 +266,9 @@ async fn fetch_via_api(client: &ArchClient) -> Result<OfficialIndex> {
                             .get("pkgname")
                             .and_then(|v| v.as_str())
                             .ok_or_else(|| {
-                                ArchToolkitError::Parse(format!(
-                                    "Invalid API response: missing 'pkgname' field"
-                                ))
+                                ArchToolkitError::Parse(
+                                    "Invalid API response: missing 'pkgname' field".to_string(),
+                                )
                             })?;
 
                     let repo_name = result.get("repo").and_then(|v| v.as_str()).unwrap_or(repo);
@@ -288,7 +283,7 @@ async fn fetch_via_api(client: &ArchClient) -> Result<OfficialIndex> {
                             if rel.is_empty() {
                                 v.to_string()
                             } else {
-                                format!("{}-{}", v, rel)
+                                format!("{v}-{rel}")
                             }
                         })
                         .unwrap_or_default();
@@ -309,7 +304,10 @@ async fn fetch_via_api(client: &ArchClient) -> Result<OfficialIndex> {
                 }
 
                 // Check if there are more pages
-                let num_pages = json.get("num_pages").and_then(|v| v.as_u64()).unwrap_or(1);
+                let num_pages = json
+                    .get("num_pages")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(1);
                 has_more = page < num_pages;
                 page += 1;
             }
@@ -353,13 +351,10 @@ mod tests {
         let result = fetch_via_pacman();
         // Result depends on system state (pacman may or may not be available)
         // We just verify it doesn't panic and returns a Result
-        match result {
-            Ok(index) => {
-                assert!(!index.pkgs.is_empty() || index.pkgs.is_empty()); // Always true, just checking structure
-            }
-            Err(_) => {
-                // Pacman unavailable, which is acceptable
-            }
+        if let Ok(index) = result {
+            assert!(!index.pkgs.is_empty() || index.pkgs.is_empty()); // Always true, just checking structure
+        } else {
+            // Pacman unavailable, which is acceptable
         }
     }
 
@@ -387,7 +382,7 @@ mod tests {
             Err(e) => {
                 // Both methods failed, which is acceptable in test environment
                 // Error should be descriptive
-                let error_msg = format!("{}", e);
+                let error_msg = format!("{e}");
                 assert!(!error_msg.is_empty());
             }
         }
@@ -409,14 +404,11 @@ mod tests {
         let result = fetch_official_index_async().await;
         // Result depends on system state
         // We just verify it returns a Result and doesn't panic
-        match result {
-            Ok(index) => {
-                // Success
-                assert!(index.pkgs.is_empty() || !index.pkgs.is_empty());
-            }
-            Err(_) => {
-                // Both methods failed, which is acceptable in test environment
-            }
+        if let Ok(index) = result {
+            // Success
+            assert!(index.pkgs.is_empty() || !index.pkgs.is_empty());
+        } else {
+            // Both methods failed, which is acceptable in test environment
         }
     }
 }

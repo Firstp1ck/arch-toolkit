@@ -8,6 +8,7 @@
 //! ## Basic Usage
 //!
 //! ```no_run
+//! # #[cfg(feature = "aur")] mod wrap {
 //! use arch_toolkit::prelude::*;
 //!
 //! # async fn example() -> Result<()> {
@@ -15,11 +16,13 @@
 //! let packages: Vec<AurPackage> = client.aur().search("yay").await?;
 //! Ok(())
 //! # }
+//! # }
 //! ```
 //!
 //! ## With Custom Configuration
 //!
 //! ```no_run
+//! # #[cfg(feature = "aur")] mod wrap {
 //! use arch_toolkit::prelude::*;
 //! use std::time::Duration;
 //!
@@ -31,11 +34,13 @@
 //! let packages = client.aur().search("yay").await?;
 //! Ok(())
 //! # }
+//! # }
 //! ```
 //!
 //! ## Using Mock for Testing
 //!
 //! ```no_run
+//! # #[cfg(feature = "aur")] mod wrap {
 //! use arch_toolkit::prelude::*;
 //!
 //! # async fn example() -> Result<()> {
@@ -43,6 +48,7 @@
 //!     .with_search_result("yay", Ok(vec![]));
 //! let packages = mock.search("yay").await?;
 //! Ok(())
+//! # }
 //! # }
 //! ```
 //!
@@ -114,3 +120,12 @@ pub use crate::deps::{
     DependencyResolution, DependencyResolver, ResolverConfig, ReverseDependencyAnalyzer,
     ReverseDependencyReport, get_installed_packages, parse_dep_spec, version_satisfies,
 };
+
+// Index types and functions
+#[cfg(feature = "index")]
+pub use crate::types::index::{
+    IndexQueryResult, InstalledPackagesMode, OfficialIndex, OfficialPackage,
+};
+
+#[cfg(feature = "index")]
+pub use crate::index::{fetch_official_index, load_from_disk, save_to_disk, search_official};
