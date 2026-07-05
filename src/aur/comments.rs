@@ -729,17 +729,7 @@ mod tests {
     fn test_comments_error_includes_package_context() {
         // Test that CommentsFailed error includes the package name
         let package = "yay";
-        // Create a reqwest::Error by using an invalid CA certificate
-        // This is safe in tests as we're intentionally creating an error
-        #[allow(clippy::unwrap_used)]
-        let cert_result = reqwest::Certificate::from_pem(b"invalid cert");
-        let mock_error = match cert_result {
-            Ok(cert) => reqwest::Client::builder()
-                .add_root_certificate(cert)
-                .build()
-                .expect_err("Should fail to build client with invalid cert"),
-            Err(e) => e,
-        };
+        let mock_error = crate::aur::utils::mock_reqwest_error();
         let error = ArchToolkitError::comments_failed(package, mock_error);
         let error_msg = format!("{error}");
         assert!(

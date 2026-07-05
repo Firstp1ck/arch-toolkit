@@ -433,8 +433,8 @@ where
 const DEFAULT_TIMEOUT_SECS: u64 = 30;
 
 #[cfg(feature = "aur")]
-/// Default user agent string.
-const DEFAULT_USER_AGENT: &str = "arch-toolkit/0.1.0";
+/// Default user agent string, derived from the crate version at build time.
+const DEFAULT_USER_AGENT: &str = concat!("arch-toolkit/", env!("CARGO_PKG_VERSION"));
 
 #[cfg(feature = "aur")]
 /// Default health check timeout (5 seconds).

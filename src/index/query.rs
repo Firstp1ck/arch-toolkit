@@ -18,7 +18,8 @@ use crate::types::index::{IndexQueryResult, OfficialIndex, OfficialPackage};
 /// - When `fuzzy` is `false`, performs a case-insensitive substring match on package names.
 /// - When `fuzzy` is `true`, uses fuzzy matching and returns items with match scores.
 /// - Fuzzy matching requires the `fuzzy-search` feature flag; if not available, falls back to substring matching.
-/// - Results are not sorted; caller should sort by fuzzy score if needed.
+/// - Fuzzy results are sorted by score (best first), ties broken by name;
+///   substring results keep the index order.
 ///
 /// # Example
 ///
@@ -87,6 +88,14 @@ pub fn search_official(index: &OfficialIndex, query: &str, fuzzy: bool) -> Vec<I
                 fuzzy_score: if use_fuzzy { Some(score) } else { None },
             });
         }
+    }
+
+    if use_fuzzy {
+        results.sort_by(|a, b| {
+            b.fuzzy_score
+                .cmp(&a.fuzzy_score)
+                .then_with(|| a.package.name.cmp(&b.package.name))
+        });
     }
 
     results

@@ -44,13 +44,16 @@ pub fn detect_aur_helper() -> Option<AurHelper> {
 /// Inputs: None.
 ///
 /// Output:
-/// - `Some(PrivilegeTool::Sudo)` when `sudo` is available.
-/// - `Some(PrivilegeTool::Doas)` when only `doas` is available.
+/// - `Some(PrivilegeTool::Doas)` when `doas` is available.
+/// - `Some(PrivilegeTool::Sudo)` when only `sudo` is available.
 /// - `None` when neither tool is installed.
 ///
 /// Details:
-/// - Preference order (sudo first, doas fallback) matches Pacsea's privilege
-///   resolution default.
+/// - Preference order (doas first, sudo fallback) matches Pacsea's `Auto`
+///   privilege mode: sudo is present on most systems by default, so an
+///   installed doas signals a deliberate user choice.
+/// - Callers with an explicit user configuration should honor it via
+///   [`is_privilege_tool_available`] instead of calling this.
 /// - Password handling is intentionally out of scope for arch-toolkit.
 ///
 /// # Example
@@ -65,10 +68,10 @@ pub fn detect_aur_helper() -> Option<AurHelper> {
 /// ```
 #[must_use]
 pub fn detect_privilege_tool() -> Option<PrivilegeTool> {
-    if command_on_path(PrivilegeTool::Sudo.binary_name()) {
-        Some(PrivilegeTool::Sudo)
-    } else if command_on_path(PrivilegeTool::Doas.binary_name()) {
+    if command_on_path(PrivilegeTool::Doas.binary_name()) {
         Some(PrivilegeTool::Doas)
+    } else if command_on_path(PrivilegeTool::Sudo.binary_name()) {
+        Some(PrivilegeTool::Sudo)
     } else {
         None
     }
@@ -130,8 +133,9 @@ mod tests {
         }
         if let Some(tool) = detect_privilege_tool() {
             assert!(is_privilege_tool_available(tool));
-            if is_privilege_tool_available(PrivilegeTool::Sudo) {
-                assert_eq!(tool, PrivilegeTool::Sudo);
+            // Preference: if doas is available, it must be chosen over sudo.
+            if is_privilege_tool_available(PrivilegeTool::Doas) {
+                assert_eq!(tool, PrivilegeTool::Doas);
             }
         }
     }

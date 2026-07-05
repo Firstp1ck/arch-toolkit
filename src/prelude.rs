@@ -128,7 +128,10 @@ pub use crate::types::index::{
 };
 
 #[cfg(feature = "index")]
-pub use crate::index::{fetch_official_index, load_from_disk, save_to_disk, search_official};
+pub use crate::index::{
+    detect_enabled_repos, fetch_official_index, fetch_official_index_for_repos, load_from_disk,
+    load_from_disk_or_default, save_to_disk, search_official,
+};
 
 // Install types and functions
 #[cfg(feature = "install")]
@@ -138,9 +141,10 @@ pub use crate::types::install::{
 
 #[cfg(feature = "install")]
 pub use crate::install::{
-    InstallPlan, build_aur_install, build_batch_install, build_pacman_install,
-    build_remove_command, build_update_command, detect_aur_helper, detect_privilege_tool,
-    with_privilege,
+    InstallPlan, aur_install_shell_fallback, aur_update_shell_fallback, build_aur_install,
+    build_aur_update_command, build_batch_install, build_force_sync_update_command,
+    build_pacman_install, build_remove_command, build_update_command, detect_aur_helper,
+    detect_privilege_tool, with_privilege,
 };
 
 // News types and functions

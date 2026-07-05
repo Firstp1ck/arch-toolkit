@@ -12,7 +12,7 @@
 //! - **Command building** — pacman install/remove/update, AUR helper install
 //! - **Batch planning** — split mixed target lists between pacman and an AUR helper
 //! - **Detection** — find the preferred AUR helper (`paru` → `yay`) and privilege
-//!   tool (`sudo` → `doas`) on `PATH`
+//!   tool (`doas` → `sudo`) on `PATH`
 //! - **Shell safety** — strict package-name validation and POSIX quoting helpers
 //!
 //! # Features
@@ -100,8 +100,9 @@ pub use crate::types::install::{
 
 // Re-export command builders
 pub use command::{
-    build_aur_install, build_pacman_install, build_remove_command, build_update_command,
-    with_privilege,
+    NO_AUR_HELPER_MESSAGE, aur_install_shell_fallback, aur_update_shell_fallback,
+    build_aur_install, build_aur_update_command, build_force_sync_update_command,
+    build_pacman_install, build_remove_command, build_update_command, with_privilege,
 };
 
 // Re-export batch planning

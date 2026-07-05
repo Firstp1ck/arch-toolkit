@@ -8,6 +8,9 @@ use crate::types::index::{OfficialIndex, OfficialPackage};
 #[cfg(feature = "aur")]
 use crate::client::{ArchClient, rate_limit_archlinux};
 
+/// Default repositories queried when the caller does not supply a repo list.
+const DEFAULT_REPOS: [&str; 3] = ["core", "extra", "multilib"];
+
 /// What: Fetch the official package index using `pacman -Sl`.
 ///
 /// Inputs:
@@ -19,6 +22,9 @@ use crate::client::{ArchClient, rate_limit_archlinux};
 ///
 /// Details:
 /// - Uses `pacman -Sl` for fast, local fetching (no network required).
+/// - Queries the default repositories (core, extra, multilib) only. On
+///   derivative distros (`EndeavourOS`, `CachyOS`, ...) combine
+///   [`detect_enabled_repos`] with [`fetch_official_index_for_repos`] instead.
 /// - For API fallback, use `fetch_official_index_async()` instead.
 /// - Rebuilds name index after fetching for O(1) lookups.
 ///
@@ -36,7 +42,167 @@ use crate::client::{ArchClient, rate_limit_archlinux};
 /// # Ok::<(), arch_toolkit::error::ArchToolkitError>(())
 /// ```
 pub fn fetch_official_index() -> Result<OfficialIndex> {
-    fetch_via_pacman()
+    fetch_via_pacman(&DEFAULT_REPOS)
+}
+
+/// What: Fetch the official package index for an explicit repository list.
+///
+/// Inputs:
+/// - `repos`: Repository names to query via `pacman -Sl <repo>`, in order.
+///
+/// Output:
+/// - `Ok(OfficialIndex)` containing packages from the given repositories.
+/// - `Err` if pacman is unavailable or a repository query fails.
+///
+/// Details:
+/// - Lets callers include derivative-distro repositories (`EndeavourOS`,
+///   `CachyOS`, Chaotic-AUR, ...) that the default list omits; discover them
+///   with [`detect_enabled_repos`].
+/// - Deduplicates by `(repo, name)` and rebuilds the name index, exactly like
+///   [`fetch_official_index`].
+///
+/// # Errors
+///
+/// - Returns `Err(ArchToolkitError::Parse)` if pacman is unavailable, a listed
+///   repository is unknown to pacman, or output cannot be parsed.
+///
+/// # Example
+///
+/// ```no_run
+/// use arch_toolkit::index::{detect_enabled_repos, fetch_official_index_for_repos};
+///
+/// let repos = detect_enabled_repos();
+/// let repo_refs: Vec<&str> = repos.iter().map(String::as_str).collect();
+/// let index = fetch_official_index_for_repos(&repo_refs)?;
+/// println!("Found {} packages across {} repos", index.pkgs.len(), repos.len());
+/// # Ok::<(), arch_toolkit::error::ArchToolkitError>(())
+/// ```
+pub fn fetch_official_index_for_repos(repos: &[&str]) -> Result<OfficialIndex> {
+    fetch_via_pacman(repos)
+}
+
+/// What: Discover repositories enabled in `/etc/pacman.conf`.
+///
+/// Inputs:
+/// - None: Reads the system pacman configuration.
+///
+/// Output:
+/// - Repository names in declaration order (e.g., `["core", "extra", "multilib", "chaotic-aur"]`).
+/// - The default list (core, extra, multilib) when the file cannot be read.
+///
+/// Details:
+/// - Parses `[section]` headers, skipping `[options]`, and follows top-level
+///   `Include =` directives one level deep (with simple `*` glob support) so
+///   repos declared in included files are found too.
+/// - Purely local file parsing; never invokes pacman or the network.
+#[must_use]
+pub fn detect_enabled_repos() -> Vec<String> {
+    detect_enabled_repos_from(std::path::Path::new("/etc/pacman.conf"))
+}
+
+/// What: Discover repositories enabled in a specific pacman configuration file.
+///
+/// Inputs:
+/// - `path`: Path to a pacman.conf-style file.
+///
+/// Output:
+/// - Repository names in declaration order; the default list (core, extra,
+///   multilib) when the file cannot be read.
+///
+/// Details:
+/// - Same parsing rules as [`detect_enabled_repos`]; exists so callers and
+///   tests can target non-system configuration files.
+#[must_use]
+pub fn detect_enabled_repos_from(path: &std::path::Path) -> Vec<String> {
+    let Ok(content) = std::fs::read_to_string(path) else {
+        tracing::debug!(path = %path.display(), "pacman.conf unreadable; using default repos");
+        return DEFAULT_REPOS.iter().map(ToString::to_string).collect();
+    };
+
+    let mut repos: Vec<String> = Vec::new();
+    collect_repo_sections(&content, &mut repos, true);
+    if repos.is_empty() {
+        return DEFAULT_REPOS.iter().map(ToString::to_string).collect();
+    }
+    repos
+}
+
+/// What: Collect repository section names from pacman.conf content.
+///
+/// Inputs:
+/// - `content`: File content to scan.
+/// - `repos`: Accumulator preserving declaration order without duplicates.
+/// - `follow_includes`: Follow `Include =` directives (one level deep).
+///
+/// Details:
+/// - `[options]` is skipped; comment lines (`#`) are ignored.
+/// - Include values support a trailing `*` glob within a single directory,
+///   matching pacman's common `Include = /etc/pacman.d/*.conf` usage.
+fn collect_repo_sections(content: &str, repos: &mut Vec<String>, follow_includes: bool) {
+    for line in content.lines() {
+        let line = line.trim();
+        if line.starts_with('#') {
+            continue;
+        }
+        if let Some(section) = line.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
+            let section = section.trim();
+            if !section.is_empty()
+                && !section.eq_ignore_ascii_case("options")
+                && !repos.iter().any(|r| r == section)
+            {
+                repos.push(section.to_string());
+            }
+        } else if follow_includes && let Some(value) = line.strip_prefix("Include") {
+            let Some(include_path) = value.split('=').nth(1).map(str::trim) else {
+                continue;
+            };
+            for file in expand_include_glob(include_path) {
+                if let Ok(included) = std::fs::read_to_string(&file) {
+                    collect_repo_sections(&included, repos, false);
+                }
+            }
+        }
+    }
+}
+
+/// What: Expand a pacman.conf `Include` value into concrete file paths.
+///
+/// Inputs:
+/// - `pattern`: Literal path or a pattern with `*` in the file-name component.
+///
+/// Output:
+/// - Matching paths, sorted for deterministic ordering; the literal path when
+///   no glob character is present.
+///
+/// Details:
+/// - Only file-name globs are supported (e.g., `/etc/pacman.d/*.conf`), which
+///   covers pacman's common usage without pulling in a glob dependency.
+fn expand_include_glob(pattern: &str) -> Vec<std::path::PathBuf> {
+    let path = std::path::Path::new(pattern);
+    let Some(file_pattern) = path.file_name().and_then(|f| f.to_str()) else {
+        return Vec::new();
+    };
+    if !file_pattern.contains('*') {
+        return vec![path.to_path_buf()];
+    }
+    let Some(parent) = path.parent() else {
+        return Vec::new();
+    };
+    let (prefix, suffix) = file_pattern.split_once('*').unwrap_or((file_pattern, ""));
+    let Ok(entries) = std::fs::read_dir(parent) else {
+        return Vec::new();
+    };
+    let mut matches: Vec<std::path::PathBuf> = entries
+        .filter_map(std::result::Result::ok)
+        .map(|e| e.path())
+        .filter(|p| {
+            p.file_name()
+                .and_then(|f| f.to_str())
+                .is_some_and(|name| name.starts_with(prefix) && name.ends_with(suffix))
+        })
+        .collect();
+    matches.sort();
+    matches
 }
 
 /// What: Fetch the official package index asynchronously, trying pacman first and falling back to API.
@@ -71,7 +237,7 @@ pub fn fetch_official_index() -> Result<OfficialIndex> {
 #[cfg(feature = "index")]
 pub async fn fetch_official_index_async() -> Result<OfficialIndex> {
     // Try pacman first (fast, local)
-    match tokio::task::spawn_blocking(fetch_via_pacman)
+    match tokio::task::spawn_blocking(|| fetch_via_pacman(&DEFAULT_REPOS))
         .await
         .map_err(|e| ArchToolkitError::Parse(format!("Blocking task failed: {e}")))?
     {
@@ -100,17 +266,57 @@ pub async fn fetch_official_index_async() -> Result<OfficialIndex> {
     }
 }
 
+/// What: Fetch the official package index for an explicit repository list, asynchronously.
+///
+/// Inputs:
+/// - `repos`: Repository names to query via `pacman -Sl <repo>`, in order.
+///
+/// Output:
+/// - `Result<OfficialIndex>` containing packages from the given repositories.
+///
+/// Details:
+/// - Pacman-only: unlike [`fetch_official_index_async`], this never falls back
+///   to the network API, so behavior is predictable for offline-first callers.
+/// - Runs the blocking pacman queries via `tokio::task::spawn_blocking`.
+///
+/// # Errors
+///
+/// - Returns `Err(ArchToolkitError::Parse)` if pacman is unavailable, a listed
+///   repository is unknown to pacman, or the blocking task fails.
+///
+/// # Example
+///
+/// ```no_run
+/// use arch_toolkit::index::fetch_official_index_for_repos_async;
+///
+/// # async fn example() -> Result<(), arch_toolkit::error::ArchToolkitError> {
+/// let repos = vec!["core".to_string(), "extra".to_string(), "chaotic-aur".to_string()];
+/// let index = fetch_official_index_for_repos_async(repos).await?;
+/// println!("Found {} packages", index.pkgs.len());
+/// # Ok(())
+/// # }
+/// ```
+#[cfg(feature = "index")]
+pub async fn fetch_official_index_for_repos_async(repos: Vec<String>) -> Result<OfficialIndex> {
+    tokio::task::spawn_blocking(move || {
+        let repo_refs: Vec<&str> = repos.iter().map(String::as_str).collect();
+        fetch_via_pacman(&repo_refs)
+    })
+    .await
+    .map_err(|e| ArchToolkitError::Parse(format!("Blocking task failed: {e}")))?
+}
+
 /// What: Fetch official packages using `pacman -Sl` command.
 ///
 /// Inputs:
-/// - None: Executes `pacman -Sl` for core, extra, and multilib repositories.
+/// - `repos`: Repository names to query, in order.
 ///
 /// Output:
 /// - `Ok(OfficialIndex)` with packages from pacman output, deduplicated and indexed.
 /// - `Err` if pacman command fails or output cannot be parsed.
 ///
 /// Details:
-/// - Executes `pacman -Sl <repo>` for each repository (core, extra, multilib).
+/// - Executes `pacman -Sl <repo>` for each given repository.
 /// - Parses output format: `"repo pkgname version [installed]"`.
 /// - Deduplicates packages by `(repo, name)` tuple.
 /// - Rebuilds name index after fetching.
@@ -119,11 +325,10 @@ pub async fn fetch_official_index_async() -> Result<OfficialIndex> {
 /// # Errors
 ///
 /// - Returns `Err(ArchToolkitError::Parse)` if pacman is unavailable or output cannot be parsed.
-fn fetch_via_pacman() -> Result<OfficialIndex> {
-    let repos = ["core", "extra", "multilib"];
+fn fetch_via_pacman(repos: &[&str]) -> Result<OfficialIndex> {
     let mut pkgs = Vec::new();
 
-    for repo in &repos {
+    for repo in repos {
         tracing::debug!("Running: pacman -Sl {}", repo);
         let output = Command::new("pacman")
             .args(["-Sl", repo])
@@ -348,7 +553,7 @@ mod tests {
         // This test would require mocking pacman command, which is complex
         // Instead, we test the parsing logic indirectly via integration tests
         // For unit tests, we verify the function exists and can be called
-        let result = fetch_via_pacman();
+        let result = fetch_via_pacman(&DEFAULT_REPOS);
         // Result depends on system state (pacman may or may not be available)
         // We just verify it doesn't panic and returns a Result
         if let Ok(index) = result {
@@ -356,6 +561,36 @@ mod tests {
         } else {
             // Pacman unavailable, which is acceptable
         }
+    }
+
+    #[test]
+    /// What: Verify `detect_enabled_repos_from` parses section headers and skips `[options]`.
+    ///
+    /// Inputs:
+    /// - Temporary pacman.conf with options, standard repos, and a derivative repo.
+    ///
+    /// Output:
+    /// - Repo names in declaration order, without `options`, without duplicates.
+    ///
+    /// Details:
+    /// - Also verifies the default-list fallback for unreadable paths.
+    fn detect_enabled_repos_parses_sections() {
+        let dir = std::env::temp_dir().join("arch-toolkit-test-pacmanconf");
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let conf = dir.join("pacman.conf");
+        std::fs::write(
+            &conf,
+            "# comment\n[options]\nHoldPkg = pacman\n\n[core]\nInclude = /nonexistent/mirrorlist\n[extra]\n[multilib]\n[chaotic-aur]\n[core]\n",
+        )
+        .expect("write conf");
+
+        let repos = detect_enabled_repos_from(&conf);
+        assert_eq!(repos, ["core", "extra", "multilib", "chaotic-aur"]);
+
+        let missing = detect_enabled_repos_from(std::path::Path::new("/nonexistent/pacman.conf"));
+        assert_eq!(missing, DEFAULT_REPOS.map(String::from));
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

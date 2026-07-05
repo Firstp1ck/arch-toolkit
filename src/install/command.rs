@@ -9,6 +9,12 @@ use crate::types::install::{AurHelper, CascadeMode, CommandSpec, InstallOptions,
 
 use super::shell::validate_package_names;
 
+/// Message printed by shell-fallback bodies when no AUR helper is installed.
+///
+/// Matches Pacsea's terminal-install error text so migrating callers keep
+/// byte-identical output.
+pub const NO_AUR_HELPER_MESSAGE: &str = "No AUR helper (paru/yay) found.";
+
 /// What: Build a pacman install command for official repository packages.
 ///
 /// Inputs:
@@ -197,6 +203,178 @@ pub fn build_update_command(helper: Option<AurHelper>, noconfirm: bool) -> Comma
     CommandSpec { program, args }
 }
 
+/// What: Build a full-system update command that force-refreshes sync databases.
+///
+/// Inputs:
+/// - `helper`: When `Some`, use the AUR helper; when `None`, plain pacman.
+/// - `noconfirm`: Pass `--noconfirm` for non-interactive updates.
+///
+/// Output:
+/// - `CommandSpec` like `pacman -Syyu --noconfirm`.
+///
+/// Details:
+/// - `-Syyu` re-downloads all sync databases even when they appear up to date;
+///   use after mirror changes (mirrors Pacsea's force-sync update option).
+/// - Same privilege rules as [`build_update_command`].
+///
+/// # Example
+///
+/// ```
+/// use arch_toolkit::install::build_force_sync_update_command;
+///
+/// let spec = build_force_sync_update_command(None, true);
+/// assert_eq!(spec.to_shell_string(), "pacman -Syyu --noconfirm");
+/// ```
+#[must_use]
+pub fn build_force_sync_update_command(helper: Option<AurHelper>, noconfirm: bool) -> CommandSpec {
+    let program = helper.map_or("pacman", AurHelper::binary_name).to_string();
+    let mut args = vec!["-Syyu".to_string()];
+    if noconfirm {
+        args.push("--noconfirm".to_string());
+    }
+    CommandSpec { program, args }
+}
+
+/// What: Build an AUR-only update command (`-Sua`).
+///
+/// Inputs:
+/// - `helper`: The AUR helper to run the update with.
+/// - `noconfirm`: Pass `--noconfirm` for non-interactive updates.
+///
+/// Output:
+/// - `CommandSpec` like `paru -Sua --noconfirm`.
+///
+/// Details:
+/// - Updates AUR packages only, leaving official packages to a separate
+///   `pacman -Syu` step — mirroring Pacsea's split system-update flow where
+///   the AUR step runs conditionally after the pacman step succeeds.
+/// - Must NOT be wrapped in [`with_privilege`]; helpers escalate internally.
+///
+/// # Example
+///
+/// ```
+/// use arch_toolkit::install::build_aur_update_command;
+/// use arch_toolkit::types::install::AurHelper;
+///
+/// let spec = build_aur_update_command(AurHelper::Paru, true);
+/// assert_eq!(spec.to_shell_string(), "paru -Sua --noconfirm");
+/// ```
+#[must_use]
+pub fn build_aur_update_command(helper: AurHelper, noconfirm: bool) -> CommandSpec {
+    let mut args = vec!["-Sua".to_string()];
+    if noconfirm {
+        args.push("--noconfirm".to_string());
+    }
+    CommandSpec {
+        program: helper.binary_name().to_string(),
+        args,
+    }
+}
+
+/// What: Build a shell body that installs AUR packages with runtime helper fallback.
+///
+/// Inputs:
+/// - `names`: AUR package names to install (validated).
+/// - `options`: Flag options (`needed`, `noconfirm`, `aur_only`).
+///
+/// Output:
+/// - `Ok(String)` with a POSIX shell snippet that picks `paru`, then `yay`,
+///   at execution time, or prints [`NO_AUR_HELPER_MESSAGE`].
+///
+/// Details:
+/// - Unlike [`build_aur_install`], helper selection happens inside the spawned
+///   shell (the terminal's `PATH`), not in the calling process — matching
+///   Pacsea's `aur_install_body`. Prefer this when the command runs in an
+///   external terminal whose environment may differ from the caller's.
+/// - Names pass the same strict validation as all builders, so interpolating
+///   them into the shell string is safe without quoting.
+///
+/// # Errors
+///
+/// Returns `ArchToolkitError::InvalidPackageName` when a name fails validation,
+/// or `ArchToolkitError::EmptyInput` when `names` is empty.
+///
+/// # Example
+///
+/// ```
+/// use arch_toolkit::install::aur_install_shell_fallback;
+/// use arch_toolkit::types::install::InstallOptions;
+///
+/// let body = aur_install_shell_fallback(&["yay-bin"], &InstallOptions::default())?;
+/// assert!(body.contains("if command -v paru >/dev/null 2>&1; then paru"));
+/// assert!(body.contains("elif command -v yay >/dev/null 2>&1; then yay"));
+/// # Ok::<(), arch_toolkit::error::ArchToolkitError>(())
+/// ```
+pub fn aur_install_shell_fallback<S: AsRef<str>>(
+    names: &[S],
+    options: &InstallOptions,
+) -> Result<String> {
+    validate_non_empty(names, "AUR install")?;
+    validate_package_names(names, "AUR install")?;
+    let mut flags = String::from("-S");
+    if options.aur_only {
+        flags.push_str(" --aur");
+    }
+    if options.needed {
+        flags.push_str(" --needed");
+    }
+    if options.noconfirm {
+        flags.push_str(" --noconfirm");
+    }
+    let joined = names
+        .iter()
+        .map(std::convert::AsRef::as_ref)
+        .collect::<Vec<_>>()
+        .join(" ");
+    Ok(helper_fallback_body(&format!("{flags} {joined}")))
+}
+
+/// What: Build a shell body that updates AUR packages with runtime helper fallback.
+///
+/// Inputs:
+/// - `noconfirm`: Pass `--noconfirm` for non-interactive updates.
+///
+/// Output:
+/// - A POSIX shell snippet running `paru -Sua` / `yay -Sua`, or printing
+///   [`NO_AUR_HELPER_MESSAGE`] when neither helper exists.
+///
+/// Details:
+/// - Shell-time counterpart of [`build_aur_update_command`], for callers that
+///   spawn the update in an external terminal (Pacsea's system-update flow).
+///
+/// # Example
+///
+/// ```
+/// use arch_toolkit::install::aur_update_shell_fallback;
+///
+/// let body = aur_update_shell_fallback(true);
+/// assert!(body.contains("paru -Sua --noconfirm"));
+/// ```
+#[must_use]
+pub fn aur_update_shell_fallback(noconfirm: bool) -> String {
+    let flags = if noconfirm {
+        "-Sua --noconfirm"
+    } else {
+        "-Sua"
+    };
+    helper_fallback_body(flags)
+}
+
+/// What: Wrap helper arguments in the paru → yay runtime-fallback shell body.
+///
+/// Inputs:
+/// - `tail`: Flags and package names appended to the chosen helper.
+///
+/// Output:
+/// - Parenthesized `if/elif/else` snippet matching Pacsea's `aur_install_body`.
+fn helper_fallback_body(tail: &str) -> String {
+    format!(
+        "(if command -v paru >/dev/null 2>&1; then paru {tail}; \
+         elif command -v yay >/dev/null 2>&1; then yay {tail}; \
+         else echo '{NO_AUR_HELPER_MESSAGE}'; fi)"
+    )
+}
+
 /// What: Wrap a command with a privilege escalation tool prefix.
 ///
 /// Inputs:
@@ -370,6 +548,74 @@ mod tests {
             build_update_command(Some(AurHelper::Paru), false).to_shell_string(),
             "paru -Syu"
         );
+    }
+
+    #[test]
+    /// What: Verify force-sync and AUR-only update builders.
+    ///
+    /// Inputs:
+    /// - Pacman and helper variants with and without `--noconfirm`.
+    ///
+    /// Output:
+    /// - `-Syyu` and `-Sua` flag sets matching Pacsea's system-update flow.
+    ///
+    /// Details:
+    /// - `-Sua` must target the helper only; `-Syyu` force-refreshes databases.
+    fn force_sync_and_aur_only_updates() {
+        assert_eq!(
+            build_force_sync_update_command(None, true).to_shell_string(),
+            "pacman -Syyu --noconfirm"
+        );
+        assert_eq!(
+            build_force_sync_update_command(Some(AurHelper::Yay), false).to_shell_string(),
+            "yay -Syyu"
+        );
+        assert_eq!(
+            build_aur_update_command(AurHelper::Paru, true).to_shell_string(),
+            "paru -Sua --noconfirm"
+        );
+        assert_eq!(
+            build_aur_update_command(AurHelper::Yay, false).to_shell_string(),
+            "yay -Sua"
+        );
+    }
+
+    #[test]
+    /// What: Verify runtime-fallback shell bodies match Pacsea's format.
+    ///
+    /// Inputs:
+    /// - Install and update fallback bodies with default options.
+    ///
+    /// Output:
+    /// - Parenthesized paru → yay `if/elif/else` with the exact error message.
+    ///
+    /// Details:
+    /// - Helper selection happens at shell execution time, not plan time.
+    fn shell_fallback_bodies() {
+        let body = aur_install_shell_fallback(&["yay-bin"], &InstallOptions::default())
+            .expect("build body");
+        assert_eq!(
+            body,
+            "(if command -v paru >/dev/null 2>&1; then paru -S --aur --needed --noconfirm yay-bin; \
+             elif command -v yay >/dev/null 2>&1; then yay -S --aur --needed --noconfirm yay-bin; \
+             else echo 'No AUR helper (paru/yay) found.'; fi)"
+        );
+
+        let update = aur_update_shell_fallback(false);
+        assert!(update.contains("paru -Sua;"));
+        assert!(update.contains(NO_AUR_HELPER_MESSAGE));
+
+        let inj = aur_install_shell_fallback(&["bad;rm -rf /"], &InstallOptions::default());
+        assert!(matches!(
+            inj,
+            Err(ArchToolkitError::InvalidPackageName { .. })
+        ));
+
+        let empty: [&str; 0] = [];
+        assert!(matches!(
+            aur_install_shell_fallback(&empty, &InstallOptions::default()),
+            Err(ArchToolkitError::EmptyInput { .. })
+        ));
     }
 
     #[test]

@@ -139,3 +139,21 @@ pub fn u64_of(v: &Value, keys: &[&str]) -> Option<u64> {
     }
     None
 }
+
+/// What: Manufacture a `reqwest::Error` for error-context tests.
+///
+/// Output:
+/// - A builder error produced from an invalid proxy URL.
+///
+/// Details:
+/// - Test-only helper; an unparseable proxy URL reliably yields a
+///   `reqwest::Error` across reqwest versions (unlike invalid certificates,
+///   whose validation became lazy in reqwest 0.13).
+#[cfg(test)]
+#[must_use]
+pub fn mock_reqwest_error() -> reqwest::Error {
+    match reqwest::Proxy::all("not a valid proxy url") {
+        Err(e) => e,
+        Ok(_) => unreachable!("invalid proxy URL must not parse"),
+    }
+}

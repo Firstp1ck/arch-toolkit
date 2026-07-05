@@ -1,12 +1,11 @@
 //! Dependency delta analysis: compare declared dependencies against the host.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::hash::BuildHasher;
-use std::process::{Command, Stdio};
 
 use crate::deps::{
-    get_installed_version, is_package_installed_or_provided, parse_dep_spec, parse_pkgbuild_deps,
-    parse_srcinfo_deps, version_satisfies,
+    get_foreign_packages, get_installed_versions, is_package_installed_or_provided, parse_dep_spec,
+    parse_pkgbuild_deps, parse_srcinfo_deps, version_satisfies,
 };
 use crate::types::sandbox::{DependencyDelta, SandboxInfo};
 
@@ -126,12 +125,43 @@ fn build_info<S: BuildHasher>(
     installed: &HashSet<String, S>,
     provided: &HashSet<String, S>,
 ) -> SandboxInfo {
+    // Query host state once for all four categories (two subprocesses total,
+    // instead of two per dependency).
+    let host = HostState::query();
     SandboxInfo {
         package_name: package_name.to_string(),
-        depends: analyze_dependencies(depends, installed, provided),
-        makedepends: analyze_dependencies(makedepends, installed, provided),
-        checkdepends: analyze_dependencies(checkdepends, installed, provided),
-        optdepends: analyze_dependencies(optdepends, installed, provided),
+        depends: analyze_with_host(depends, installed, provided, &host),
+        makedepends: analyze_with_host(makedepends, installed, provided, &host),
+        checkdepends: analyze_with_host(checkdepends, installed, provided, &host),
+        optdepends: analyze_with_host(optdepends, installed, provided, &host),
+    }
+}
+
+/// What: Batched host package state shared across dependency categories.
+///
+/// Inputs:
+/// - Built by [`HostState::query`] from `pacman -Q` and `pacman -Qqm`.
+///
+/// Details:
+/// - Replaces per-dependency `pacman -Q <name>` / `pacman -Qi <name>` calls,
+///   which multiplied into a subprocess storm on long dependency lists.
+struct HostState {
+    /// Installed package versions (revision suffix stripped).
+    versions: HashMap<String, String>,
+    /// Foreign (`Repository: local`) package names.
+    foreign: HashSet<String>,
+}
+
+impl HostState {
+    /// What: Query installed versions and foreign packages in two subprocesses.
+    ///
+    /// Output:
+    /// - Populated state; empty maps when pacman is unavailable (graceful degradation).
+    fn query() -> Self {
+        Self {
+            versions: get_installed_versions(),
+            foreign: get_foreign_packages(),
+        }
     }
 }
 
@@ -154,13 +184,35 @@ fn build_info<S: BuildHasher>(
 ///   requirement (never failing the check).
 /// - Installed local packages are filtered out, matching Pacsea (they are
 ///   not relevant for build-preflight analysis).
-/// - Version lookup shells out to `pacman -Q` per installed dependency and
-///   degrades gracefully when pacman is unavailable.
+/// - Host state (versions, foreign packages) is queried in two batched pacman
+///   invocations up front and degrades gracefully when pacman is unavailable.
 #[must_use]
 pub fn analyze_dependencies<S: BuildHasher>(
     deps: &[String],
     installed: &HashSet<String, S>,
     provided: &HashSet<String, S>,
+) -> Vec<DependencyDelta> {
+    analyze_with_host(deps, installed, provided, &HostState::query())
+}
+
+/// What: Analyze dependency specs against pre-queried host state.
+///
+/// Inputs:
+/// - `deps` / `installed` / `provided`: As in [`analyze_dependencies`].
+/// - `host`: Batched installed-version and foreign-package state.
+///
+/// Output:
+/// - One `DependencyDelta` per spec (foreign/local packages are skipped).
+///
+/// Details:
+/// - Shared core of [`analyze_dependencies`] and [`build_info`]; performs no
+///   subprocess calls except the lazy `pacman -Qqo` provides check for names
+///   missing from the installed set.
+fn analyze_with_host<S: BuildHasher>(
+    deps: &[String],
+    installed: &HashSet<String, S>,
+    provided: &HashSet<String, S>,
+    host: &HostState,
 ) -> Vec<DependencyDelta> {
     deps.iter()
         .filter_map(|dep_spec| {
@@ -168,12 +220,12 @@ pub fn analyze_dependencies<S: BuildHasher>(
             let is_installed = is_package_installed_or_provided(&pkg_name, installed, provided);
 
             // Skip local packages — not relevant for sandbox analysis
-            if is_installed && is_local_package(&pkg_name) {
+            if is_installed && host.foreign.contains(&pkg_name) {
                 return None;
             }
 
             let installed_version = if is_installed {
-                get_installed_version(&pkg_name).ok()
+                host.versions.get(&pkg_name).cloned()
             } else {
                 None
             };
@@ -225,43 +277,6 @@ pub fn extract_package_name(dep_spec: &str) -> String {
         .split_once(':')
         .map_or(dep_spec, |(before, _)| before);
     parse_dep_spec(spec_only.trim()).name
-}
-
-/// What: Check whether an installed package comes from the `local` repository.
-///
-/// Inputs:
-/// - `name`: Installed package name.
-///
-/// Output:
-/// - `true` when `pacman -Qi` reports the Repository field as `local` or empty.
-///
-/// Details:
-/// - Returns `false` when pacman is unavailable or the field cannot be read
-///   (graceful degradation, matching Pacsea).
-fn is_local_package(name: &str) -> bool {
-    let output = Command::new("pacman")
-        .args(["-Qi", name])
-        .env("LC_ALL", "C")
-        .env("LANG", "C")
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output();
-
-    if let Ok(output) = output
-        && output.status.success()
-    {
-        let text = String::from_utf8_lossy(&output.stdout);
-        for line in text.lines() {
-            if line.starts_with("Repository")
-                && let Some(colon_pos) = line.find(':')
-            {
-                let repo = line[colon_pos + 1..].trim().to_lowercase();
-                return repo == "local" || repo.is_empty();
-            }
-        }
-    }
-    false
 }
 
 #[cfg(test)]

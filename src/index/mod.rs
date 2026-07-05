@@ -174,9 +174,13 @@ pub use query::{all_official, search_official};
 
 // Re-export fetch functions
 #[cfg(feature = "index")]
-pub use fetch::{fetch_official_index, fetch_official_index_async};
+pub use fetch::{
+    detect_enabled_repos, detect_enabled_repos_from, fetch_official_index,
+    fetch_official_index_async, fetch_official_index_for_repos,
+    fetch_official_index_for_repos_async,
+};
 
 // Re-export persist functions
-pub use persist::{load_from_disk, save_to_disk};
+pub use persist::{load_from_disk, load_from_disk_or_default, save_to_disk};
 #[cfg(feature = "index")]
 pub use persist::{load_from_disk_async, save_to_disk_async};

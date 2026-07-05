@@ -61,7 +61,7 @@ Add `arch-toolkit` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-arch-toolkit = "0.1.2"
+arch-toolkit = "0.2"
 ```
 
 ### Feature Flags
@@ -78,19 +78,19 @@ arch-toolkit = "0.1.2"
 To disable default features:
 
 ```toml
-arch-toolkit = { version = "0.1.2", default-features = false, features = ["aur"] }
+arch-toolkit = { version = "0.2", default-features = false, features = ["aur"] }
 ```
 
 To enable dependency parsing:
 
 ```toml
-arch-toolkit = { version = "0.1.2", features = ["deps"] }
+arch-toolkit = { version = "0.2", features = ["deps"] }
 ```
 
 To enable disk caching:
 
 ```toml
-arch-toolkit = { version = "0.1.2", features = ["cache-disk"] }
+arch-toolkit = { version = "0.2", features = ["cache-disk"] }
 ```
 
 To enable package index queries:
@@ -545,7 +545,7 @@ Input validation is enabled by default and validates package names and search qu
 
 ## Requirements
 
-- Rust 1.70 or later
+- Rust 1.91 or later (edition 2024, `Duration::from_mins`)
 - Tokio runtime (for async operations)
 
 ## License

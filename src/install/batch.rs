@@ -32,6 +32,56 @@ pub struct InstallPlan {
     pub aur: Vec<String>,
 }
 
+impl InstallPlan {
+    /// What: Render the plan as a single `&&`-chained shell command line.
+    ///
+    /// Inputs:
+    /// - `&self`: The planned commands, in execution order.
+    ///
+    /// Output:
+    /// - Shell string like `sudo pacman -S ... && paru -S --aur ...`;
+    ///   empty string for an empty plan.
+    ///
+    /// Details:
+    /// - `&&` chaining stops the AUR step when the pacman step fails —
+    ///   matching Pacsea's mixed-install semantics. Callers executing the
+    ///   `commands` vector directly must replicate this by checking each
+    ///   command's exit status before running the next.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use arch_toolkit::install::build_batch_install;
+    /// use arch_toolkit::types::install::{AurHelper, InstallOptions};
+    /// use arch_toolkit::PackageRef;
+    ///
+    /// let targets = vec![
+    ///     PackageRef::official("ripgrep", "14.0.0", "extra", "x86_64"),
+    ///     PackageRef::aur("yay-bin", "12.0.0"),
+    /// ];
+    /// let plan = build_batch_install(
+    ///     &targets,
+    ///     Some(AurHelper::Paru),
+    ///     None,
+    ///     &InstallOptions::default(),
+    ///     None::<&std::collections::HashSet<String>>,
+    /// )?;
+    /// assert_eq!(
+    ///     plan.to_shell_string(),
+    ///     "pacman -S --needed --noconfirm ripgrep && paru -S --aur --needed --noconfirm yay-bin"
+    /// );
+    /// # Ok::<(), arch_toolkit::error::ArchToolkitError>(())
+    /// ```
+    #[must_use]
+    pub fn to_shell_string(&self) -> String {
+        self.commands
+            .iter()
+            .map(CommandSpec::to_shell_string)
+            .collect::<Vec<_>>()
+            .join(" && ")
+    }
+}
+
 /// What: Plan a batch installation by splitting targets between pacman and an AUR helper.
 ///
 /// Inputs:

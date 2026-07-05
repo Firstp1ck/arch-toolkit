@@ -59,14 +59,16 @@ pub async fn info(client: &ArchClient, names: &[&str]) -> Result<Vec<AurPackageD
     }
 
     // Build URL with multiple arg parameters using array notation
-    // AUR RPC v5 requires arg[]=name1&arg[]=name2 format for multiple packages
+    // AUR RPC v5 requires arg[]=name1&arg[]=name2 format for multiple packages.
+    // Names must be percent-encoded: a raw `+` (valid in package names) would
+    // otherwise be decoded as a space by the server.
     let mut url = String::from("https://aur.archlinux.org/rpc/v5/info?");
     for (i, name) in names.iter().enumerate() {
         if i > 0 {
             url.push('&');
         }
         url.push_str("arg[]=");
-        url.push_str(name);
+        url.push_str(&crate::aur::utils::percent_encode(name));
     }
 
     debug!(names = ?names, url = %url, "fetching AUR package info");
@@ -247,17 +249,7 @@ mod tests {
     fn test_info_error_includes_package_context() {
         // Test that InfoFailed error includes the package names
         let packages = &["yay", "paru"];
-        // Create a reqwest::Error by using an invalid CA certificate
-        // This is safe in tests as we're intentionally creating an error
-        #[allow(clippy::unwrap_used)]
-        let cert_result = reqwest::Certificate::from_pem(b"invalid cert");
-        let mock_error = match cert_result {
-            Ok(cert) => reqwest::Client::builder()
-                .add_root_certificate(cert)
-                .build()
-                .expect_err("Should fail to build client with invalid cert"),
-            Err(e) => e,
-        };
+        let mock_error = crate::aur::utils::mock_reqwest_error();
         let error = ArchToolkitError::info_failed(packages, mock_error);
         let error_msg = format!("{error}");
         assert!(

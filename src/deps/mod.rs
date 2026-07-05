@@ -183,8 +183,9 @@ mod version;
 pub use parse::{parse_dep_spec, parse_pacman_si_conflicts, parse_pacman_si_deps};
 pub use pkgbuild::{parse_pkgbuild_conflicts, parse_pkgbuild_deps};
 pub use query::{
-    get_available_version, get_installed_packages, get_installed_version, get_provided_packages,
-    get_upgradable_packages, is_package_installed_or_provided,
+    get_available_version, get_foreign_packages, get_installed_packages, get_installed_version,
+    get_installed_versions, get_provided_packages, get_upgradable_packages,
+    is_package_installed_or_provided,
 };
 pub use resolve::{
     DependencyResolver, batch_fetch_official_deps, determine_status, fetch_package_conflicts,

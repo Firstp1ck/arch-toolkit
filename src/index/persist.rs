@@ -49,6 +49,44 @@ pub fn load_from_disk(path: &Path) -> Result<OfficialIndex> {
     Ok(index)
 }
 
+/// What: Load an official package index from disk, tolerating missing or corrupt files.
+///
+/// Inputs:
+/// - `path`: File path to read the JSON index from.
+///
+/// Output:
+/// - The deserialized index, or an empty `OfficialIndex` when the file is
+///   missing, unreadable, or not valid index JSON.
+///
+/// Details:
+/// - Convenience wrapper over [`load_from_disk`] for resilient startup paths
+///   (Pacsea's original semantics): a corrupt cache should trigger a fresh
+///   fetch, not a startup error. The failure reason is logged at debug level.
+///
+/// # Example
+///
+/// ```no_run
+/// use arch_toolkit::index::{fetch_official_index, load_from_disk_or_default};
+/// use std::path::Path;
+///
+/// let mut index = load_from_disk_or_default(Path::new("official_index.json"));
+/// if index.pkgs.is_empty() {
+///     index = fetch_official_index()?;
+/// }
+/// # Ok::<(), arch_toolkit::error::ArchToolkitError>(())
+/// ```
+#[must_use]
+pub fn load_from_disk_or_default(path: &Path) -> OfficialIndex {
+    load_from_disk(path).unwrap_or_else(|e| {
+        tracing::debug!(
+            path = %path.display(),
+            error = %e,
+            "Failed to load official index; returning empty index"
+        );
+        OfficialIndex::default()
+    })
+}
+
 /// What: Persist an official package index to a JSON file on disk.
 ///
 /// Inputs:

@@ -5,7 +5,7 @@
 //! degrade when pacman is unavailable, returning empty sets or None as appropriate.
 
 use crate::error::{ArchToolkitError, Result};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::hash::BuildHasher;
 use std::process::{Command, Stdio};
 
@@ -327,6 +327,119 @@ pub fn get_installed_version(name: &str) -> Result<String> {
     Err(ArchToolkitError::Parse(format!(
         "Could not parse version from pacman -Q output for package '{name}'"
     )))
+}
+
+/// What: Retrieve the versions of all installed packages in one pacman invocation.
+///
+/// Inputs:
+/// - (none): Invokes `pacman -Q` to list every installed package with its version.
+///
+/// Output:
+/// - Map from package name to installed version (revision suffix stripped,
+///   e.g. `1.2.3-1` -> `1.2.3`, matching [`get_installed_version`]).
+/// - Empty map on failure (graceful degradation).
+///
+/// Details:
+/// - One subprocess for the whole system — use this instead of calling
+///   [`get_installed_version`] in a loop (e.g. build-preflight analysis of a
+///   long dependency list).
+/// - Sets `LC_ALL=C` and `LANG=C` for consistent locale-independent output.
+///
+/// # Example
+///
+/// ```no_run
+/// use arch_toolkit::deps::get_installed_versions;
+///
+/// let versions = get_installed_versions();
+/// if let Some(version) = versions.get("pacman") {
+///     println!("pacman {version}");
+/// }
+/// ```
+#[must_use]
+pub fn get_installed_versions() -> HashMap<String, String> {
+    tracing::debug!("Running: pacman -Q");
+    let output = Command::new("pacman")
+        .args(["-Q"])
+        .env("LC_ALL", "C")
+        .env("LANG", "C")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            let text = String::from_utf8_lossy(&output.stdout);
+            text.lines()
+                .filter_map(|line| {
+                    let (name, version) = line.trim().split_once(' ')?;
+                    let version = version.trim();
+                    let version = version.split('-').next().unwrap_or(version);
+                    Some((name.to_string(), version.to_string()))
+                })
+                .collect()
+        }
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            tracing::error!("pacman -Q failed: {}", stderr);
+            HashMap::new()
+        }
+        Err(e) => {
+            tracing::error!("Failed to execute pacman -Q: {}", e);
+            HashMap::new()
+        }
+    }
+}
+
+/// What: Enumerate foreign (locally installed, not in any sync repo) packages.
+///
+/// Inputs:
+/// - (none): Invokes `pacman -Qqm` to list foreign package names.
+///
+/// Output:
+/// - Set of package names whose repository is `local` (AUR builds, manual
+///   installs); empty set on failure (graceful degradation).
+///
+/// Details:
+/// - Equivalent to checking `pacman -Qi` `Repository: local` per package, but
+///   in a single subprocess — use for batch local-package filtering.
+/// - Sets `LC_ALL=C` and `LANG=C` for consistent locale-independent output.
+///
+/// # Example
+///
+/// ```no_run
+/// use arch_toolkit::deps::get_foreign_packages;
+///
+/// let foreign = get_foreign_packages();
+/// println!("{} foreign packages installed", foreign.len());
+/// ```
+#[must_use]
+pub fn get_foreign_packages() -> HashSet<String> {
+    tracing::debug!("Running: pacman -Qqm");
+    let output = Command::new("pacman")
+        .args(["-Qqm"])
+        .env("LC_ALL", "C")
+        .env("LANG", "C")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            let text = String::from_utf8_lossy(&output.stdout);
+            text.lines()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        }
+        // Non-zero exit also occurs when no foreign packages exist.
+        Ok(_) => HashSet::new(),
+        Err(e) => {
+            tracing::error!("Failed to execute pacman -Qqm: {}", e);
+            HashSet::new()
+        }
+    }
 }
 
 /// What: Query the repositories for the latest available version of a package.
