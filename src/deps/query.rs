@@ -231,15 +231,15 @@ fn check_if_provided<S: BuildHasher>(
 /// Inputs:
 /// - `name`: Package name to check.
 /// - `installed`: Set of directly installed package names.
-/// - `provided`: Set of package names provided by installed packages (unused, kept for API compatibility).
+/// - `provided`: Caller-supplied set of package names provided by installed packages.
 ///
 /// Output:
 /// - Returns `true` if the package is directly installed or provided by an installed package.
 ///
 /// Details:
-/// - First checks if the package is directly installed.
-/// - Then lazily checks if it's provided by any installed package using `pacman -Qqo`.
-/// - This handles cases like `rustup` providing `rust` efficiently without querying all packages upfront.
+/// - First checks the caller-supplied installed and provided sets.
+/// - Then lazily checks unresolved names using `pacman -Qqo`.
+/// - This preserves deterministic injected-set behavior while retaining efficient host fallback.
 ///
 /// # Example
 ///
@@ -255,14 +255,13 @@ fn check_if_provided<S: BuildHasher>(
 pub fn is_package_installed_or_provided<S: BuildHasher>(
     name: &str,
     installed: &HashSet<String, S>,
-    _provided: &HashSet<String, S>,
+    provided: &HashSet<String, S>,
 ) -> bool {
-    // First check if directly installed
-    if installed.contains(name) {
+    if installed.contains(name) || provided.contains(name) {
         return true;
     }
 
-    // Lazy check if provided by any installed package (much faster than building full set upfront)
+    // Lazy host fallback avoids building the full provides set for normal callers.
     check_if_provided(name, installed).is_some()
 }
 
@@ -580,12 +579,17 @@ mod tests {
     #[test]
     fn test_is_package_installed_or_provided_direct_install() {
         let installed = HashSet::from(["pacman".to_string(), "vim".to_string()]);
-        let provided = HashSet::new();
+        let provided = HashSet::from(["arch-toolkit-virtual-fixture".to_string()]);
         assert!(is_package_installed_or_provided(
             "pacman", &installed, &provided
         ));
         assert!(is_package_installed_or_provided(
             "vim", &installed, &provided
+        ));
+        assert!(is_package_installed_or_provided(
+            "arch-toolkit-virtual-fixture",
+            &installed,
+            &provided
         ));
         assert!(!is_package_installed_or_provided(
             "nonexistent",

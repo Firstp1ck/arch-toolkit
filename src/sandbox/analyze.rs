@@ -325,11 +325,15 @@ mod tests {
     /// - Delta marked installed.
     ///
     /// Details:
-    /// - Virtual packages (e.g., `sh` provided by `bash`) must not appear missing.
+    /// - Uses a fixture-only virtual name so host pacman state cannot make the test pass accidentally.
     fn provided_counts_as_installed() {
         let installed: HashSet<String> = HashSet::new();
-        let provided: HashSet<String> = HashSet::from(["sh".to_string()]);
-        let deltas = analyze_dependencies(&["sh".to_string()], &installed, &provided);
+        let provided: HashSet<String> = HashSet::from(["arch-toolkit-virtual-fixture".to_string()]);
+        let deltas = analyze_dependencies(
+            &["arch-toolkit-virtual-fixture".to_string()],
+            &installed,
+            &provided,
+        );
         assert!(deltas[0].is_installed);
     }
 
