@@ -20,6 +20,66 @@ fn main() {
     std::process::exit(1);
 }
 
+/// What: Supply deterministic `.SRCINFO` fixtures for graph-resolution example output.
+///
+/// Inputs:
+/// - Batched requested names and a caller-provided metadata timeout.
+///
+/// Output:
+/// - Returns in-memory found or missing metadata responses.
+///
+/// Details:
+/// - This example provider performs no network, helper, pacman, or filesystem operation, so the
+///   graph example remains runnable with the `deps` feature alone.
+#[cfg(feature = "deps")]
+struct ExampleGraphMetadataProvider;
+
+#[cfg(feature = "deps")]
+impl arch_toolkit::deps::DependencyMetadataProvider for ExampleGraphMetadataProvider {
+    /// What: Return fixture metadata for the graph example's requested packages.
+    ///
+    /// Inputs:
+    /// - `requested_names`: Requested fixture package names.
+    /// - `timeout`: Resolver-provided metadata timeout, unused by local fixtures.
+    ///
+    /// Output:
+    /// - Returns one found or missing response for each requested name.
+    ///
+    /// Details:
+    /// - The source is verified fixture metadata rather than inferred from host package commands.
+    fn fetch_metadata(
+        &self,
+        requested_names: &[String],
+        _timeout: std::time::Duration,
+    ) -> Vec<arch_toolkit::deps::DependencyMetadataResponse> {
+        requested_names
+            .iter()
+            .map(|requested_name| match requested_name.as_str() {
+                "graph-root" => arch_toolkit::deps::DependencyMetadataResponse::Found(
+                    arch_toolkit::deps::DependencyMetadata::new(
+                        "graph-root",
+                        "graph-root",
+                        arch_toolkit::DependencySource::Aur,
+                        "pkgbase = graph-root\npkgname = graph-root\npkgver = 1\npkgrel = 1\ndepends = graph-child>=1\n",
+                    ),
+                ),
+                "graph-child" => arch_toolkit::deps::DependencyMetadataResponse::Found(
+                    arch_toolkit::deps::DependencyMetadata::new(
+                        "graph-child",
+                        "graph-child",
+                        arch_toolkit::DependencySource::Aur,
+                        "pkgbase = graph-child\npkgname = graph-child\npkgver = 1\npkgrel = 1\n",
+                    ),
+                ),
+                _ => arch_toolkit::deps::DependencyMetadataResponse::Missing {
+                    requested_name: requested_name.clone(),
+                    reason: "example fixture does not contain this package".to_string(),
+                },
+            })
+            .collect()
+    }
+}
+
 #[cfg(feature = "deps")]
 #[allow(
     clippy::too_many_lines,
@@ -30,12 +90,12 @@ fn main() {
 )]
 fn main() -> arch_toolkit::error::Result<()> {
     use arch_toolkit::deps::{
-        DependencyResolver, ReverseDependencyAnalyzer, batch_fetch_official_deps, compare_versions,
-        determine_dependency_source, determine_status, extract_major_component,
-        fetch_package_conflicts, get_available_version, get_installed_packages,
-        get_installed_required_by, get_installed_version, get_provided_packages,
-        get_upgradable_packages, has_installed_required_by, is_major_version_bump,
-        is_package_installed_or_provided, is_system_package, parse_dep_spec,
+        DependencyGraphConfig, DependencyResolver, ReverseDependencyAnalyzer,
+        batch_fetch_official_deps, compare_versions, determine_dependency_source, determine_status,
+        extract_major_component, fetch_package_conflicts, get_available_version,
+        get_installed_packages, get_installed_required_by, get_installed_version,
+        get_provided_packages, get_upgradable_packages, has_installed_required_by,
+        is_major_version_bump, is_package_installed_or_provided, is_system_package, parse_dep_spec,
         parse_pacman_si_conflicts, parse_pacman_si_deps, parse_pkgbuild_conflicts,
         parse_pkgbuild_deps, parse_srcinfo, parse_srcinfo_conflicts, parse_srcinfo_deps,
         version_satisfies,
@@ -299,6 +359,24 @@ conflicts = conflicting-pkg
             }
         }
         Err(e) => println!("  Error resolving dependencies: {}", e),
+    }
+
+    // Example 7a: Fixture-only bounded dependency graph resolution
+    println!("\n7a. Fixture-Only Dependency Graph Resolution");
+    println!("-----------------------------------------------");
+    let graph_provider = ExampleGraphMetadataProvider;
+    let graph_roots = [PackageRef::aur("graph-root", "1")];
+    match resolver.resolve_graph(
+        &graph_roots,
+        &graph_provider,
+        DependencyGraphConfig::default(),
+    ) {
+        Ok(graph) => {
+            println!("  Nodes: {}", graph.nodes.len());
+            println!("  Diagnostics: {}", graph.diagnostics.len());
+            print!("{}", graph.render_tree());
+        }
+        Err(error) => println!("  Error resolving graph fixtures: {error}"),
     }
 
     // Example 7b: Dependency resolver with custom configuration

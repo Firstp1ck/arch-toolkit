@@ -1,8 +1,9 @@
 //! Arch Linux news RSS feed fetching and parsing.
 
-use crate::error::{ArchToolkitError, Result};
+use crate::error::Result;
 use crate::types::news::ArchNewsItem;
 
+use super::article::fetch_bounded_text;
 use super::date::normalize_feed_date;
 
 /// URL of the official Arch Linux news RSS feed.
@@ -122,10 +123,13 @@ pub fn parse_arch_news_rss(
     items
 }
 
-/// What: Fetch recent Arch Linux news items from the official RSS feed.
+/// Maximum response size accepted for a raw news or advisory feed payload.
+pub const MAX_FEED_RESPONSE_BYTES: usize = 512 * 1024;
+
+/// What: Fetch recent Arch Linux news from the official feed URL.
 ///
 /// Inputs:
-/// - `client`: Caller-provided HTTP client (controls timeouts, user agent).
+/// - `client`: Caller-provided HTTP client controlling transport policy.
 /// - `limit`: Maximum number of items to return (best-effort).
 /// - `cutoff_date`: Optional `YYYY-MM-DD` date for early filtering.
 ///
@@ -133,55 +137,162 @@ pub fn parse_arch_news_rss(
 /// - `Ok(Vec<ArchNewsItem>)` with normalized dates, newest first.
 ///
 /// Details:
-/// - Fetches `https://archlinux.org/feeds/news/` and delegates to
-///   [`parse_arch_news_rss`].
-/// - No caching or rate limiting; callers decide their fetch cadence.
+/// - Delegates to [`fetch_arch_news_from`] with [`ARCH_NEWS_FEED_URL`].
+/// - No cache is used unless callers opt into [`fetch_arch_news_cached`].
 ///
 /// # Errors
 ///
-/// Returns `ArchToolkitError::Parse` when the request fails or the server
-/// returns a non-success status.
-///
-/// # Example
-///
-/// ```no_run
-/// use arch_toolkit::news::fetch_arch_news;
-///
-/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// let client = reqwest::Client::new();
-/// let items = fetch_arch_news(&client, 10, None).await?;
-/// for item in items {
-///     println!("{} {} ({})", item.date, item.title, item.url);
-/// }
-/// # Ok(())
-/// # }
-/// ```
+/// Returns an error for transport, response-status, response-bound, or UTF-8
+/// failures.
 pub async fn fetch_arch_news(
     client: &reqwest::Client,
     limit: usize,
     cutoff_date: Option<&str>,
 ) -> Result<Vec<ArchNewsItem>> {
-    let response = client
-        .get(ARCH_NEWS_FEED_URL)
-        .send()
-        .await
-        .map_err(|e| ArchToolkitError::Parse(format!("news feed request failed: {e}")))?;
-    let status = response.status();
-    let body = response
-        .text()
-        .await
-        .map_err(|e| ArchToolkitError::Parse(format!("news feed body read failed: {e}")))?;
-    tracing::debug!(
-        status = status.as_u16(),
-        bytes = body.len(),
-        "fetched arch news feed"
-    );
-    if !status.is_success() {
-        return Err(ArchToolkitError::Parse(format!(
-            "news feed returned status {status}"
-        )));
-    }
+    fetch_arch_news_from(client, ARCH_NEWS_FEED_URL, limit, cutoff_date).await
+}
+
+/// What: Fetch and parse Arch news from a caller-specified feed URL.
+///
+/// Inputs:
+/// - `client`: Caller-provided HTTP client controlling transport policy.
+/// - `feed_url`: Absolute HTTP(S) RSS URL, useful for proxies and fixtures.
+/// - `limit`: Maximum number of items to return (best-effort).
+/// - `cutoff_date`: Optional `YYYY-MM-DD` date for early filtering.
+///
+/// Output:
+/// - Parsed news items from the successful bounded feed response.
+///
+/// Details:
+/// - Reads at most [`MAX_FEED_RESPONSE_BYTES`] and keeps caller-client
+///   configuration rather than constructing a hidden HTTP client.
+///
+/// # Errors
+///
+/// Returns an error for invalid URLs, failed requests, non-success statuses,
+/// oversized bodies, or invalid UTF-8.
+pub async fn fetch_arch_news_from(
+    client: &reqwest::Client,
+    feed_url: &str,
+    limit: usize,
+    cutoff_date: Option<&str>,
+) -> Result<Vec<ArchNewsItem>> {
+    let body = fetch_bounded_text(client, feed_url, MAX_FEED_RESPONSE_BYTES, "news feed").await?;
+    tracing::debug!(bytes = body.len(), "fetched arch news feed");
     Ok(parse_arch_news_rss(&body, limit, cutoff_date))
+}
+
+/// What: Fetch official Arch news with an optional caller-owned feed cache.
+///
+/// Inputs:
+/// - `client`: Caller-provided HTTP client controlling transport policy.
+/// - `limit`: Maximum number of items to return (best-effort).
+/// - `cutoff_date`: Optional `YYYY-MM-DD` date for early filtering.
+/// - `cache`: Optional generic feed cache; `None` always fetches fresh content.
+///
+/// Output:
+/// - Parsed news items from a cache hit or successful bounded HTTP response.
+///
+/// Details:
+/// - Delegates to [`fetch_arch_news_cached_from`] using the official feed URL.
+/// - The generic cache is independent from AUR cache types and freshness policy.
+///
+/// # Errors
+///
+/// Returns requested cache, transport, status, bound, or UTF-8 errors.
+pub async fn fetch_arch_news_cached(
+    client: &reqwest::Client,
+    limit: usize,
+    cutoff_date: Option<&str>,
+    cache: Option<&dyn super::FeedCache>,
+) -> Result<Vec<ArchNewsItem>> {
+    fetch_arch_news_cached_from(client, ARCH_NEWS_FEED_URL, limit, cutoff_date, cache).await
+}
+
+/// What: Fetch caller-specified Arch news with an optional generic feed cache.
+///
+/// Inputs:
+/// - `client`: Caller-provided HTTP client controlling transport policy.
+/// - `feed_url`: Absolute HTTP(S) RSS URL, useful for proxies and fixtures.
+/// - `limit`: Maximum number of items to return (best-effort).
+/// - `cutoff_date`: Optional `YYYY-MM-DD` date for early filtering.
+/// - `cache`: Optional generic feed cache; `None` always fetches fresh content.
+///
+/// Output:
+/// - Parsed news items from a cache hit or a newly stored successful response.
+///
+/// Details:
+/// - Raw payloads are cached by feed kind and URL before caller-specific limit
+///   and cutoff parsing, so one bounded cached feed supports multiple queries.
+///
+/// # Errors
+///
+/// Returns requested cache, transport, status, bound, or UTF-8 errors.
+pub async fn fetch_arch_news_cached_from(
+    client: &reqwest::Client,
+    feed_url: &str,
+    limit: usize,
+    cutoff_date: Option<&str>,
+    cache: Option<&dyn super::FeedCache>,
+) -> Result<Vec<ArchNewsItem>> {
+    let body = fetch_cached_feed_text(client, feed_url, "arch-news", "news feed", cache).await?;
+    Ok(parse_arch_news_rss(&body, limit, cutoff_date))
+}
+
+/// What: Fetch a raw feed response, consulting an optional generic cache first.
+///
+/// Inputs:
+/// - `client`: Caller-provided HTTP client controlling transport policy.
+/// - `feed_url`: Absolute HTTP(S) feed URL.
+/// - `feed_kind`: Namespace preventing RSS/Atom cache-key collisions.
+/// - `resource_name`: Human-readable feed name used in actionable errors.
+/// - `cache`: Optional generic caller-owned feed cache.
+///
+/// Output:
+/// - Bounded UTF-8 feed text from the cache or a successful HTTP response.
+///
+/// Details:
+/// - Only successful HTTP responses are cached; cache errors are explicit when
+///   callers request caching rather than silently degrading durable semantics.
+///
+/// # Errors
+///
+/// Returns cache, transport, status, bound, or UTF-8 errors.
+pub(super) async fn fetch_cached_feed_text(
+    client: &reqwest::Client,
+    feed_url: &str,
+    feed_kind: &str,
+    resource_name: &str,
+    cache: Option<&dyn super::FeedCache>,
+) -> Result<String> {
+    let cache_key = feed_cache_key(feed_kind, feed_url);
+    if let Some(cache) = cache
+        && let Some(body) = cache.get(&cache_key)?
+    {
+        return Ok(body);
+    }
+
+    let body = fetch_bounded_text(client, feed_url, MAX_FEED_RESPONSE_BYTES, resource_name).await?;
+    if let Some(cache) = cache {
+        cache.put(&cache_key, &body)?;
+    }
+    Ok(body)
+}
+
+/// What: Build a namespaced stable cache key for one feed URL.
+///
+/// Inputs:
+/// - `feed_kind`: Short feed-type namespace.
+/// - `feed_url`: Caller-selected absolute feed URL.
+///
+/// Output:
+/// - A cache key that distinguishes RSS news from Atom advisories.
+///
+/// Details:
+/// - URL-specific keys permit fixture/proxy URLs without coupling news to AUR
+///   cache internals or their key formats.
+pub(super) fn feed_cache_key(feed_kind: &str, feed_url: &str) -> String {
+    format!("{feed_kind}:{feed_url}")
 }
 
 #[cfg(test)]

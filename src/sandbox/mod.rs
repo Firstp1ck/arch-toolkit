@@ -1,4 +1,4 @@
-//! Sandbox module for build-preflight dependency analysis.
+//! Sandbox module for build-preflight dependency and static PKGBUILD analysis.
 //!
 //! Given a package's PKGBUILD or .SRCINFO, this module compares its declared
 //! dependencies against the host's installed packages and reports, per
@@ -9,7 +9,10 @@
 //! - whether the declared version constraint is satisfied.
 //!
 //! It answers "what would I need to install to build this AUR package?"
-//! before any build starts — ported from Pacsea's sandbox preflight.
+//! before any build starts — ported from Pacsea's sandbox preflight. The
+//! optional security analysis reads PKGBUILD text only: it never executes,
+//! sources, expands, or builds that content, and it reports stable rule IDs and
+//! explicit limitations instead of an aggregate risk score.
 //!
 //! # Features
 //!
@@ -57,9 +60,14 @@
 //! ```
 
 mod analyze;
+mod security;
 
 // Re-export types from types module
-pub use crate::types::sandbox::{DependencyDelta, SandboxInfo};
+pub use crate::types::sandbox::{
+    DependencyDelta, SandboxAnalysisLimitation, SandboxFinding, SandboxInfo, SandboxRuleId,
+    SandboxStaticAnalysis,
+};
 
 // Re-export analysis functions
 pub use analyze::{analyze_dependencies, analyze_pkgbuild, analyze_srcinfo, extract_package_name};
+pub use security::analyze_pkgbuild_security;

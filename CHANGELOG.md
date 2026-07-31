@@ -5,11 +5,44 @@ All notable changes to arch-toolkit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Official repository index discovery, persistence, repo-aware fetching, and ranked optional fuzzy search.
+- Shell-safe install/update/remove command planning, mixed official/AUR install plans, doas-first privilege detection, and AUR-helper fallback bodies.
+- Arch news and security-advisory feed parsing/fetching.
+- PKGBUILD and `.SRCINFO` sandbox dependency preflight analysis.
+- Bounded, deterministic dependency graph resolution with injected metadata, cycle diagnostics, constraint intersection, provider provenance, split-package handling, and stable tree rendering.
+- Deterministic feature-matrix, complexity, missing-tool, and compatibility quality gates.
+
+### Changed
+
+- Selected the next minor version, `0.3.0`, because post-v0.2.0 work adds multiple public feature-gated modules while preserving existing entry points.
+- Package version comparison now handles epochs and follows libalpm by comparing numeric pkgrel only when both operands declare one.
+- Existing Arch news and advisory fetch functions now reject responses above 512 KiB with `InputTooLong`; AUR search responses are bounded to 4 MiB without imposing a result-count cap.
+- Release preview now performs local verification without committing, tagging, pushing, creating releases, or publishing.
+- Internal pacman and helper parsing remains locale-independent through `LC_ALL=C`/`LANG=C`; no unused localized-label API was added.
+
+### Fixed
+
+- AUR info names are percent-encoded correctly.
+- Environment- and PATH-mutating tests are serialized and restore process state.
+- The previous complexity script no longer reports success after analyzing zero functions.
+- Documentation and automation now consistently use `v<version>` tags.
+
+### Compatibility and intentional differences
+
+- Command planners never execute commands or implicitly combine `pacman -Sy && pacman -S`; callers own terminals, passwords/PAM, dry-run presentation, and execution.
+- News caching is feature-neutral rather than coupled to AUR cache internals.
+- AUR search does not claim unsupported server-side pagination, a fixed 200-result cap, streaming, or WebSocket support.
+- Live network/system tests remain ignored diagnostics; deterministic fixtures are release gates.
+
 ## [0.2.0] - 2025-12-24
 
 # Release v0.2.0 - Complete Dependency Management
 
-**Release Date**: 2025-01-XX
+**Release Date**: 2025-12-24
 
 ## 🚀 What's New
 
@@ -630,4 +663,6 @@ Found a bug or have a feature request? Open an issue on [GitHub](https://github.
 - **Complexity thresholds**: Cyclomatic and data flow complexity < 25
 - **Cache design**: Generic `Cache<K, V>` trait for extensibility
 
+[Unreleased]: https://github.com/Firstp1ck/arch-toolkit/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Firstp1ck/arch-toolkit/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Firstp1ck/arch-toolkit/releases/tag/v0.1.0

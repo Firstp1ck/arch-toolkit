@@ -3,6 +3,7 @@
 //! This module provides functions to resolve dependencies for packages, determine
 //! dependency status, and handle batch operations for efficient dependency resolution.
 
+use crate::deps::graph::{DependencyMetadataProvider, resolve_dependency_graph};
 use crate::deps::parse::{parse_dep_spec, parse_pacman_si_conflicts, parse_pacman_si_deps};
 use crate::deps::pkgbuild::parse_pkgbuild_deps;
 use crate::deps::query::{
@@ -13,7 +14,8 @@ use crate::deps::source::{determine_dependency_source, is_system_package};
 use crate::deps::version::version_satisfies;
 use crate::error::Result;
 use crate::types::dependency::{
-    Dependency, DependencySource, DependencyStatus, PackageRef, PackageSource, ResolverConfig,
+    Dependency, DependencyGraphConfig, DependencyGraphResolution, DependencySource,
+    DependencyStatus, PackageRef, PackageSource, ResolverConfig,
 };
 use std::collections::{HashMap, HashSet};
 use std::hash::BuildHasher;
@@ -1020,6 +1022,42 @@ impl DependencyResolver {
     #[allow(clippy::missing_const_for_fn)] // ResolverConfig contains function pointer, can't be const
     pub fn with_config(config: ResolverConfig) -> Self {
         Self { config }
+    }
+
+    /// What: Resolve a bounded deterministic dependency graph through injected `.SRCINFO` metadata.
+    ///
+    /// Inputs:
+    /// - `packages`: Root package references to expand.
+    /// - `provider`: Mockable metadata provider returning verified raw `.SRCINFO` text.
+    /// - `graph_config`: Explicit graph depth, node, timeout, and batch-concurrency bounds.
+    ///
+    /// Output:
+    /// - Returns a graph with lexical nodes/edges and non-fatal structured diagnostics.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(ArchToolkitError::InvalidInput)` when node, timeout, or provider batch bounds
+    /// are zero.
+    ///
+    /// Details:
+    /// - This additive path preserves `resolve` as the synchronous direct-only host resolver.
+    /// - It is available with `deps` alone and does not execute helpers, pacman, or network I/O.
+    /// - Metadata is cached only for this call; rendering is available separately through
+    ///   `DependencyGraphResolution::render_tree`.
+    pub fn resolve_graph<P: DependencyMetadataProvider>(
+        &self,
+        packages: &[PackageRef],
+        provider: &P,
+        graph_config: DependencyGraphConfig,
+    ) -> Result<DependencyGraphResolution> {
+        resolve_dependency_graph(
+            packages,
+            provider,
+            graph_config,
+            self.config.include_optdepends,
+            self.config.include_makedepends,
+            self.config.include_checkdepends,
+        )
     }
 
     /// What: Resolve dependencies for a list of packages.

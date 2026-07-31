@@ -96,6 +96,132 @@ impl SandboxInfo {
     }
 }
 
+/// What: Identify one stable static PKGBUILD threat-model rule.
+///
+/// Inputs:
+/// - Produced by [`crate::sandbox::analyze_pkgbuild_security`] when matching
+///   text is found in a PKGBUILD.
+///
+/// Output:
+/// - A stable serialized `SB00x` identifier suitable for callers to filter or
+///   present without relying on an opaque aggregate score.
+///
+/// Details:
+/// - Rules describe potentially risky shell constructs, not proof of malicious
+///   intent. They are intentionally deterministic and text-only.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SandboxRuleId {
+    /// `SB001`: Command substitution can execute a dynamically constructed command.
+    #[serde(rename = "SB001")]
+    CommandSubstitution,
+    /// `SB002`: A download command can retrieve unreviewed remote content.
+    #[serde(rename = "SB002")]
+    RemoteDownload,
+    /// `SB003`: A privilege escalation command expands the impact of a build step.
+    #[serde(rename = "SB003")]
+    PrivilegedCommand,
+    /// `SB004`: Recursive forced removal can destroy files outside a package build tree.
+    #[serde(rename = "SB004")]
+    DestructiveRemoval,
+    /// `SB005`: Dynamic evaluation obscures the command text that will run.
+    #[serde(rename = "SB005")]
+    DynamicEvaluation,
+}
+
+impl SandboxRuleId {
+    /// What: Return the stable textual identifier for this static-analysis rule.
+    ///
+    /// Inputs: None.
+    ///
+    /// Output:
+    /// - One of `SB001` through `SB005`.
+    ///
+    /// Details:
+    /// - The value matches the enum's serde representation and is stable for
+    ///   caller-side policy, fixture, and display code.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::CommandSubstitution => "SB001",
+            Self::RemoteDownload => "SB002",
+            Self::PrivilegedCommand => "SB003",
+            Self::DestructiveRemoval => "SB004",
+            Self::DynamicEvaluation => "SB005",
+        }
+    }
+}
+
+/// What: Record evidence for one deterministic static PKGBUILD finding.
+///
+/// Inputs:
+/// - Produced from one matched source line during text-only analysis.
+///
+/// Output:
+/// - Stable rule ID, one-based line number, and a bounded source excerpt.
+///
+/// Details:
+/// - Evidence is not executed, expanded, or parsed as full shell syntax.
+/// - A finding flags review-worthy text, not a proven exploit or reputation score.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SandboxFinding {
+    /// Stable rule identifier describing the matched construct.
+    pub rule_id: SandboxRuleId,
+    /// One-based PKGBUILD line containing the evidence.
+    pub line: usize,
+    /// Bounded source excerpt retained exactly for caller review.
+    pub evidence: String,
+}
+
+/// What: State a known limitation of deterministic static PKGBUILD analysis.
+///
+/// Inputs:
+/// - Included in every [`SandboxStaticAnalysis`] result.
+///
+/// Output:
+/// - Structured, explicit scope information rather than an implied guarantee.
+///
+/// Details:
+/// - Limitations are stable categories so callers can present or persist the
+///   analysis boundary alongside findings.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SandboxAnalysisLimitation {
+    /// Analysis reads raw text only and never executes PKGBUILD content.
+    #[serde(rename = "text-only-no-execution")]
+    TextOnlyNoExecution,
+    /// The scanner does not implement a complete Bash parser or expansion model.
+    #[serde(rename = "not-a-full-shell-parser")]
+    NotFullShellParser,
+    /// Remote reputation, signatures, and external scanner results are not included.
+    #[serde(rename = "no-external-reputation-or-scanner")]
+    NoExternalReputationOrScanner,
+    /// Findings identify review signals and can include false negatives or positives.
+    #[serde(rename = "not-proof-of-malicious-intent")]
+    NotProofOfMaliciousIntent,
+}
+
+/// What: Hold a text-only PKGBUILD threat-model analysis result.
+///
+/// Inputs:
+/// - Produced by [`crate::sandbox::analyze_pkgbuild_security`] from a package
+///   name and unexecuted PKGBUILD text.
+///
+/// Output:
+/// - Structured stable-rule findings and explicit scanner limitations.
+///
+/// Details:
+/// - No aggregate risk score is calculated.
+/// - The report can be serialized for caller-owned review workflows without
+///   granting the library authority to execute or build the PKGBUILD.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SandboxStaticAnalysis {
+    /// Caller-provided package name associated with the analyzed text.
+    pub package_name: String,
+    /// Findings in source-line and stable-rule order.
+    pub findings: Vec<SandboxFinding>,
+    /// Explicit scope and correctness limitations of this text-only result.
+    pub limitations: Vec<SandboxAnalysisLimitation>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

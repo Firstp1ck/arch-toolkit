@@ -6,11 +6,131 @@
 
 #![cfg(feature = "deps")]
 
+use std::collections::BTreeMap;
+use std::sync::Mutex;
+use std::time::Duration;
+
 use arch_toolkit::deps::{
-    DependencyResolver, ReverseDependencyAnalyzer, get_installed_packages, get_upgradable_packages,
+    DependencyGraphConfig, DependencyGraphDiagnosticKind, DependencyMetadata,
+    DependencyMetadataProvider, DependencyMetadataResponse, DependencyResolver,
+    ReverseDependencyAnalyzer, get_installed_packages, get_upgradable_packages,
 };
 use arch_toolkit::error::Result;
-use arch_toolkit::{PackageRef, PackageSource};
+use arch_toolkit::{DependencySource, PackageRef, PackageSource};
+
+/// Fixture-only metadata outcome returned by `FixtureMetadataProvider`.
+#[derive(Clone)]
+enum FixtureMetadataOutcome {
+    /// Parsed metadata response.
+    Found {
+        /// Selected package name.
+        package_name: String,
+        /// Package provenance.
+        source: DependencySource,
+        /// Raw `.SRCINFO` payload.
+        srcinfo: String,
+    },
+    /// Absent metadata response.
+    Missing {
+        /// Actionable absence reason.
+        reason: String,
+    },
+    /// Deterministic transport or helper failure.
+    Failure {
+        /// Actionable failure message.
+        message: String,
+    },
+}
+
+/// Fixture-only batched metadata provider for public graph resolver tests.
+struct FixtureMetadataProvider {
+    /// Responses indexed by the requested package or virtual name.
+    outcomes: BTreeMap<String, FixtureMetadataOutcome>,
+    /// Per-run request log used to assert caching behavior.
+    requests: Mutex<Vec<String>>,
+}
+
+impl FixtureMetadataProvider {
+    /// What: Construct a metadata provider from deterministic fixture responses.
+    ///
+    /// Inputs:
+    /// - `outcomes`: Metadata outcomes indexed by requested dependency name.
+    ///
+    /// Output:
+    /// - Returns a provider with an empty request log.
+    ///
+    /// Details:
+    /// - The provider does not execute commands or access the network.
+    const fn new(outcomes: BTreeMap<String, FixtureMetadataOutcome>) -> Self {
+        Self {
+            outcomes,
+            requests: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// What: Count metadata fetches for one requested package.
+    ///
+    /// Inputs:
+    /// - `package`: Requested package or virtual dependency name.
+    ///
+    /// Output:
+    /// - Returns the number of requests recorded for the name.
+    ///
+    /// Details:
+    /// - A poisoned test mutex is treated as an empty log because the test must not panic.
+    fn request_count(&self, package: &str) -> usize {
+        self.requests.lock().map_or(0, |requests| {
+            requests
+                .iter()
+                .filter(|name| name.as_str() == package)
+                .count()
+        })
+    }
+}
+
+impl DependencyMetadataProvider for FixtureMetadataProvider {
+    fn fetch_metadata(
+        &self,
+        requested_names: &[String],
+        _timeout: Duration,
+    ) -> Vec<DependencyMetadataResponse> {
+        if let Ok(mut requests) = self.requests.lock() {
+            requests.extend(requested_names.iter().cloned());
+        }
+
+        requested_names
+            .iter()
+            .map(|requested_name| match self.outcomes.get(requested_name) {
+                Some(FixtureMetadataOutcome::Found {
+                    package_name,
+                    source,
+                    srcinfo,
+                }) => DependencyMetadataResponse::Found(DependencyMetadata::new(
+                    requested_name,
+                    package_name,
+                    source.clone(),
+                    srcinfo,
+                )),
+                Some(FixtureMetadataOutcome::Missing { reason }) => {
+                    DependencyMetadataResponse::Missing {
+                        requested_name: requested_name.clone(),
+                        reason: reason.clone(),
+                    }
+                }
+                Some(FixtureMetadataOutcome::Failure { message }) => {
+                    DependencyMetadataResponse::Failure {
+                        requested_name: requested_name.clone(),
+                        message: message.clone(),
+                    }
+                }
+                None => DependencyMetadataResponse::Missing {
+                    requested_name: requested_name.clone(),
+                    reason: "fixture has no metadata".to_string(),
+                },
+            })
+            .collect()
+    }
+}
 
 /// Test that dependency resolver handles empty input gracefully.
 #[test]
@@ -99,6 +219,274 @@ fn test_dependency_resolver_with_config() -> Result<()> {
     let resolver = DependencyResolver::with_config(config);
     let result = resolver.resolve(&[])?;
     assert_eq!(result.dependencies.len(), 0);
+    Ok(())
+}
+
+/// Test graph resolution with direct, transitive, duplicate, and provided dependencies.
+#[test]
+fn test_graph_resolver_fixture_transitive_provider_and_cache() -> Result<()> {
+    let outcomes = BTreeMap::from([
+        (
+            "aur-root".to_string(),
+            FixtureMetadataOutcome::Found {
+                package_name: "aur-root".to_string(),
+                source: DependencySource::Aur,
+                srcinfo: "pkgbase = aur-root\npkgname = aur-root\npkgver = 1\npkgrel = 1\ndepends = shared>=1:2.0-3\ndepends = virtual-lib>=1\n".to_string(),
+            },
+        ),
+        (
+            "other-root".to_string(),
+            FixtureMetadataOutcome::Found {
+                package_name: "other-root".to_string(),
+                source: DependencySource::Aur,
+                srcinfo: "pkgbase = other-root\npkgname = other-root\npkgver = 1\npkgrel = 1\ndepends = shared<=1:3.0-1\n".to_string(),
+            },
+        ),
+        (
+            "shared".to_string(),
+            FixtureMetadataOutcome::Found {
+                package_name: "shared".to_string(),
+                source: DependencySource::Aur,
+                srcinfo: "pkgbase = shared\npkgname = shared\npkgver = 1:2.5\npkgrel = 4\ndepends = leaf\n".to_string(),
+            },
+        ),
+        (
+            "virtual-lib".to_string(),
+            FixtureMetadataOutcome::Found {
+                package_name: "real-provider".to_string(),
+                source: DependencySource::Official {
+                    repo: "extra".to_string(),
+                },
+                srcinfo: "pkgbase = real-provider\npkgname = real-provider\npkgver = 1\npkgrel = 1\nprovides = virtual-lib=1\n".to_string(),
+            },
+        ),
+        (
+            "leaf".to_string(),
+            FixtureMetadataOutcome::Found {
+                package_name: "leaf".to_string(),
+                source: DependencySource::Aur,
+                srcinfo: "pkgbase = leaf\npkgname = leaf\npkgver = 1\npkgrel = 1\n".to_string(),
+            },
+        ),
+    ]);
+    let provider = FixtureMetadataProvider::new(outcomes);
+    let resolver = DependencyResolver::new();
+    let roots = vec![
+        PackageRef::aur("other-root", "1"),
+        PackageRef::aur("aur-root", "1"),
+    ];
+
+    let graph = resolver.resolve_graph(
+        &roots,
+        &provider,
+        DependencyGraphConfig {
+            max_depth: 4,
+            max_nodes: 16,
+            metadata_timeout: Duration::from_secs(1),
+            max_concurrency: 2,
+        },
+    )?;
+
+    assert_eq!(
+        graph
+            .nodes
+            .iter()
+            .map(|node| node.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["aur-root", "leaf", "other-root", "real-provider", "shared"]
+    );
+    assert_eq!(provider.request_count("shared"), 1);
+    assert!(graph.nodes.iter().any(|node| {
+        node.name == "real-provider"
+            && node.provenance.provider.as_deref() == Some("real-provider")
+            && node.provenance.requested_name == "virtual-lib"
+    }));
+    assert!(graph.diagnostics.is_empty());
+    assert_eq!(graph.render_tree(), graph.render_tree());
+    assert!(graph.render_tree().contains("real-provider"));
+    Ok(())
+}
+
+/// Test structured fixture diagnostics for malformed, missing, failed, cyclic, and incompatible metadata.
+#[test]
+fn test_graph_resolver_fixture_diagnostics_and_bounds() -> Result<()> {
+    let outcomes = BTreeMap::from([
+        (
+            "cycle-root".to_string(),
+            FixtureMetadataOutcome::Found {
+                package_name: "cycle-root".to_string(),
+                source: DependencySource::Aur,
+                srcinfo: "pkgbase = cycle-root\npkgname = cycle-root\npkgver = 1\npkgrel = 1\ndepends = cycle-child\ndepends = shared>=1:3\ndepends = missing\ndepends = malformed\ndepends = network-failure\n".to_string(),
+            },
+        ),
+        (
+            "cycle-child".to_string(),
+            FixtureMetadataOutcome::Found {
+                package_name: "cycle-child".to_string(),
+                source: DependencySource::Aur,
+                srcinfo: "pkgbase = cycle-child\npkgname = cycle-child\npkgver = 1\npkgrel = 1\ndepends = cycle-root\ndepends = shared<1:3\n".to_string(),
+            },
+        ),
+        (
+            "shared".to_string(),
+            FixtureMetadataOutcome::Found {
+                package_name: "shared".to_string(),
+                source: DependencySource::Aur,
+                srcinfo: "pkgbase = shared\npkgname = shared\npkgver = 1:3\npkgrel = 1\n".to_string(),
+            },
+        ),
+        (
+            "missing".to_string(),
+            FixtureMetadataOutcome::Missing {
+                reason: "not indexed".to_string(),
+            },
+        ),
+        (
+            "malformed".to_string(),
+            FixtureMetadataOutcome::Found {
+                package_name: "malformed".to_string(),
+                source: DependencySource::Aur,
+                srcinfo: "pkgbase = malformed\npkgver = 1\n".to_string(),
+            },
+        ),
+        (
+            "network-failure".to_string(),
+            FixtureMetadataOutcome::Failure {
+                message: "network helper failed".to_string(),
+            },
+        ),
+    ]);
+    let provider = FixtureMetadataProvider::new(outcomes);
+    let graph = DependencyResolver::new().resolve_graph(
+        &[PackageRef::aur("cycle-root", "1")],
+        &provider,
+        DependencyGraphConfig {
+            max_depth: 4,
+            max_nodes: 16,
+            metadata_timeout: Duration::from_secs(1),
+            max_concurrency: 1,
+        },
+    )?;
+
+    let kinds = graph
+        .diagnostics
+        .iter()
+        .map(|diagnostic| diagnostic.kind)
+        .collect::<Vec<_>>();
+    assert!(kinds.contains(&DependencyGraphDiagnosticKind::Cycle));
+    assert!(kinds.contains(&DependencyGraphDiagnosticKind::MissingMetadata));
+    assert!(kinds.contains(&DependencyGraphDiagnosticKind::MalformedSrcinfo));
+    assert!(kinds.contains(&DependencyGraphDiagnosticKind::MetadataFailure));
+    assert!(kinds.contains(&DependencyGraphDiagnosticKind::IncompatibleConstraints));
+    Ok(())
+}
+
+/// Test split-package selection, conflicts, and graph safety bounds through public fixtures.
+#[test]
+fn test_graph_resolver_fixture_split_conflicts_and_limits() -> Result<()> {
+    let outcomes = BTreeMap::from([
+        (
+            "root".to_string(),
+            FixtureMetadataOutcome::Found {
+                package_name: "root".to_string(),
+                source: DependencySource::Aur,
+                srcinfo: "pkgbase = root\npkgname = root\npkgver = 1\npkgrel = 1\nconflicts = conflict-target\ndepends = split-output\ndepends = conflict-target\n".to_string(),
+            },
+        ),
+        (
+            "split-output".to_string(),
+            FixtureMetadataOutcome::Found {
+                package_name: "split-output".to_string(),
+                source: DependencySource::Aur,
+                srcinfo: "pkgbase = split-base\ndepends = base-shared\npkgname = split-other\ndepends = other-only\npkgname = split-output\ndepends = output-only\npkgver = 1\npkgrel = 1\n".to_string(),
+            },
+        ),
+        (
+            "conflict-target".to_string(),
+            FixtureMetadataOutcome::Found {
+                package_name: "conflict-target".to_string(),
+                source: DependencySource::Local,
+                srcinfo: "pkgbase = conflict-target\npkgname = conflict-target\npkgver = 1\npkgrel = 1\n".to_string(),
+            },
+        ),
+        (
+            "base-shared".to_string(),
+            FixtureMetadataOutcome::Found {
+                package_name: "base-shared".to_string(),
+                source: DependencySource::Official {
+                    repo: "core".to_string(),
+                },
+                srcinfo: "pkgbase = base-shared\npkgname = base-shared\npkgver = 1\npkgrel = 1\n".to_string(),
+            },
+        ),
+        (
+            "output-only".to_string(),
+            FixtureMetadataOutcome::Found {
+                package_name: "output-only".to_string(),
+                source: DependencySource::Aur,
+                srcinfo: "pkgbase = output-only\npkgname = output-only\npkgver = 1\npkgrel = 1\n".to_string(),
+            },
+        ),
+    ]);
+    let provider = FixtureMetadataProvider::new(outcomes);
+    let resolver = DependencyResolver::new();
+    let roots = [PackageRef::aur("root", "1")];
+
+    let graph = resolver.resolve_graph(&roots, &provider, DependencyGraphConfig::default())?;
+    assert!(graph.nodes.iter().any(|node| {
+        node.name == "split-output"
+            && node.pkgbase.as_deref() == Some("split-base")
+            && node.status == arch_toolkit::deps::DependencyGraphNodeStatus::Resolved
+    }));
+    assert!(!graph.nodes.iter().any(|node| node.name == "other-only"));
+    assert!(
+        graph
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.kind == DependencyGraphDiagnosticKind::Conflict)
+    );
+    assert!(graph.nodes.iter().any(|node| {
+        node.name == "root"
+            && node.status == arch_toolkit::deps::DependencyGraphNodeStatus::Conflicting
+    }));
+    assert!(graph.nodes.iter().any(|node| {
+        node.name == "conflict-target"
+            && node.status == arch_toolkit::deps::DependencyGraphNodeStatus::Conflicting
+    }));
+
+    let depth_limited = resolver.resolve_graph(
+        &roots,
+        &provider,
+        DependencyGraphConfig {
+            max_depth: 0,
+            max_nodes: 8,
+            metadata_timeout: Duration::from_secs(1),
+            max_concurrency: 1,
+        },
+    )?;
+    assert!(
+        depth_limited
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.kind == DependencyGraphDiagnosticKind::DepthLimit)
+    );
+
+    let node_limited = resolver.resolve_graph(
+        &roots,
+        &provider,
+        DependencyGraphConfig {
+            max_depth: 4,
+            max_nodes: 1,
+            metadata_timeout: Duration::from_secs(1),
+            max_concurrency: 1,
+        },
+    )?;
+    assert!(
+        node_limited
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.kind == DependencyGraphDiagnosticKind::NodeLimit)
+    );
     Ok(())
 }
 

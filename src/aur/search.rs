@@ -9,9 +9,14 @@ use crate::client::{
 };
 use crate::error::{ArchToolkitError, Result};
 use crate::types::AurPackage;
+use std::num::NonZeroUsize;
+
 use reqwest::Client;
 use serde_json::Value;
 use tracing::{debug, warn};
+
+/// Maximum bytes accepted from one AUR RPC search response.
+const MAX_AUR_SEARCH_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 
 /// What: Search for packages in the AUR by name.
 ///
@@ -24,7 +29,9 @@ use tracing::{debug, warn};
 ///
 /// Details:
 /// - Uses AUR RPC v5 search endpoint.
-/// - Limits results to 200 packages (AUR default).
+/// - Returns every package row supplied by the single AUR RPC response; it
+///   neither assumes an upstream result cap nor requests unsupported pagination.
+/// - Use [`search_with_limit`] for an explicit caller-selected client-side cap.
 /// - Percent-encodes the query string for URL safety.
 /// - Applies rate limiting for archlinux.org requests.
 /// - Returns empty vector if no results found (not an error).
@@ -99,6 +106,53 @@ pub async fn search(client: &ArchClient, query: &str) -> Result<Vec<AurPackage>>
     Ok(result)
 }
 
+/// What: Search AUR packages with an explicit client-side result limit.
+///
+/// Inputs:
+/// - `client`: `ArchClient` used for the normal AUR RPC request.
+/// - `query`: Search query string.
+/// - `maximum_results`: Non-zero maximum number of rows returned to the caller.
+///
+/// Output:
+/// - AUR search rows in RPC order, truncated to `maximum_results` after fetch.
+///
+/// Details:
+/// - Delegates to [`search`] so validation, retry, rate limiting, and caching
+///   are identical to an uncapped request.
+/// - The cap is entirely local. It does not infer an upstream numeric cap,
+///   invent pagination, or make cache entries depend on a caller's limit.
+///
+/// # Errors
+/// - Returns the same errors as [`search`].
+pub async fn search_with_limit(
+    client: &ArchClient,
+    query: &str,
+    maximum_results: NonZeroUsize,
+) -> Result<Vec<AurPackage>> {
+    let packages = search(client, query).await?;
+    Ok(limit_search_results(packages, maximum_results))
+}
+
+/// What: Apply an explicit caller-selected cap to fetched search rows.
+///
+/// Inputs:
+/// - `packages`: Complete parsed result array from one AUR RPC response.
+/// - `maximum_results`: Non-zero maximum number of rows to retain.
+///
+/// Output:
+/// - The first `maximum_results` rows in existing response order.
+///
+/// Details:
+/// - This helper has no network or cache side effects, making the cap semantics
+///   deterministic and independent from unsupported server pagination.
+fn limit_search_results(
+    mut packages: Vec<AurPackage>,
+    maximum_results: NonZeroUsize,
+) -> Vec<AurPackage> {
+    packages.truncate(maximum_results.get());
+    packages
+}
+
 /// What: Perform the actual search request without retry logic.
 ///
 /// Inputs:
@@ -141,20 +195,12 @@ async fn perform_search_request(
         }
     };
 
-    let json: Value = match response.json().await {
-        Ok(json) => json,
-        Err(e) => {
-            warn!(error = %e, query = %query, "failed to parse AUR search JSON");
-            // reqwest::Error can contain serde_json::Error, but we'll treat it as network error
-            // since the JSON parsing happens inside reqwest
-            return Err(ArchToolkitError::search_failed(query, e));
-        }
-    };
+    let json = read_bounded_search_json(response, query).await?;
 
     let mut packages = Vec::new();
 
     if let Some(results) = json.get("results").and_then(Value::as_array) {
-        for pkg in results.iter().take(200) {
+        for pkg in results {
             let name = s(pkg, "Name");
             if name.is_empty() {
                 continue;
@@ -197,11 +243,57 @@ async fn perform_search_request(
     Ok(packages)
 }
 
+/// What: Read and parse one bounded AUR RPC search response.
+///
+/// Inputs:
+/// - `response`: Successful HTTP response.
+/// - `query`: Search query retained for actionable parse/transport context.
+///
+/// Output:
+/// - Parsed JSON document within [`MAX_AUR_SEARCH_RESPONSE_BYTES`].
+///
+/// Details:
+/// - Checks both `Content-Length` and streamed chunks so omitted or inaccurate headers cannot
+///   bypass the memory bound. The result array remains uncapped; only response bytes are bounded.
+async fn read_bounded_search_json(mut response: reqwest::Response, query: &str) -> Result<Value> {
+    if let Some(length) = response.content_length()
+        && length > MAX_AUR_SEARCH_RESPONSE_BYTES as u64
+    {
+        return Err(ArchToolkitError::InputTooLong {
+            field: "aur_search_response".to_string(),
+            max_length: MAX_AUR_SEARCH_RESPONSE_BYTES,
+            actual_length: usize::try_from(length).unwrap_or(usize::MAX),
+        });
+    }
+    let mut body = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|error| ArchToolkitError::search_failed(query, error))?
+    {
+        if body.len().saturating_add(chunk.len()) > MAX_AUR_SEARCH_RESPONSE_BYTES {
+            return Err(ArchToolkitError::InputTooLong {
+                field: "aur_search_response".to_string(),
+                max_length: MAX_AUR_SEARCH_RESPONSE_BYTES,
+                actual_length: body.len().saturating_add(chunk.len()),
+            });
+        }
+        body.extend_from_slice(&chunk);
+    }
+    serde_json::from_slice(&body).map_err(|error| {
+        ArchToolkitError::Parse(format!(
+            "failed to parse AUR search JSON for '{query}': {error}"
+        ))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::error::ArchToolkitError;
     use serde_json::json;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
     fn test_search_error_includes_query_context() {
@@ -218,6 +310,81 @@ mod tests {
             error_msg.contains("AUR search failed"),
             "Error message should indicate search operation: {error_msg}"
         );
+    }
+
+    #[test]
+    /// What: Verify result limits are client-selected rather than assumed upstream caps.
+    ///
+    /// Inputs:
+    /// - Three already-parsed AUR package rows and a limit of two.
+    ///
+    /// Output:
+    /// - The first two rows in response order.
+    ///
+    /// Details:
+    /// - The pure helper proves result limiting neither fetches a second page nor
+    ///   changes the uncapped parser behavior.
+    fn search_limit_is_explicit_and_ordered() {
+        let package = |name: &str| AurPackage {
+            name: name.to_string(),
+            version: "1.0".to_string(),
+            description: String::new(),
+            popularity: None,
+            out_of_date: None,
+            orphaned: false,
+            maintainer: None,
+        };
+        let limited = limit_search_results(
+            vec![package("first"), package("second"), package("third")],
+            NonZeroUsize::new(2).expect("non-zero test limit"),
+        );
+
+        assert_eq!(limited.len(), 2);
+        assert_eq!(limited[0].name, "first");
+        assert_eq!(limited[1].name, "second");
+    }
+
+    #[tokio::test]
+    /// What: Verify oversized AUR search responses are rejected before JSON parsing.
+    ///
+    /// Inputs:
+    /// - A deterministic local HTTP response one byte above the 4 MiB limit.
+    ///
+    /// Output:
+    /// - An [`ArchToolkitError::InputTooLong`] with the configured response bound.
+    ///
+    /// Details:
+    /// - Uses wiremock only; no live AUR endpoint or external state is involved.
+    /// - Directly exercises the bounded response reader used by every search request.
+    async fn oversized_search_response_is_rejected() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/rpc/v5/search"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(vec![
+                b'x';
+                MAX_AUR_SEARCH_RESPONSE_BYTES
+                    + 1
+            ]))
+            .mount(&server)
+            .await;
+
+        let response = reqwest::Client::new()
+            .get(format!("{}/rpc/v5/search", server.uri()))
+            .send()
+            .await
+            .expect("local oversized search response");
+        let error = read_bounded_search_json(response, "fixture")
+            .await
+            .expect_err("oversized response must fail");
+
+        assert!(matches!(
+            error,
+            ArchToolkitError::InputTooLong {
+                max_length: MAX_AUR_SEARCH_RESPONSE_BYTES,
+                actual_length,
+                ..
+            } if actual_length > MAX_AUR_SEARCH_RESPONSE_BYTES
+        ));
     }
 
     #[test]

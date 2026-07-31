@@ -11,12 +11,67 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  quality:
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose -- --test-threads=1
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Check default features
+        run: cargo check
+      - name: Test default features
+        run: cargo test -- --test-threads=1
+      - name: Test all features serially
+        run: cargo test --all-features -- --test-threads=1
+      - name: Test all features in parallel
+        run: cargo test --all-features
+      - name: Complexity analyzer contract
+        run: bash dev/scripts/complexity_selftest.sh
+      - name: Complexity threshold
+        run: bash dev/scripts/complexity_report.sh --quiet
+
+  feature-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        features:
+          - ""
+          - aur
+          - deps
+          - index
+          - install
+          - news
+          - sandbox
+          - fuzzy-search
+          - cache-disk
+          - index,fuzzy-search
+          - aur,cache-disk
+          - deps,aur
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Test feature set
+        shell: bash
+        run: |
+          if [[ -z "${{ matrix.features }}" ]]; then
+            cargo test --no-default-features -- --test-threads=1
+          else
+            cargo test --no-default-features --features "${{ matrix.features }}" -- --test-threads=1
+          fi
+
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.91
+      - uses: Swatinem/rust-cache@v2
+      - name: Check declared MSRV
+        run: cargo check --all-features

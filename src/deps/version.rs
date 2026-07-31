@@ -1,56 +1,132 @@
 //! Version comparison utilities for dependency resolution.
 //!
-//! This module provides functions to compare version strings in a way that
-//! matches pacman's version comparison algorithm, supporting dependency
-//! requirement checking and version analysis.
+//! This module provides epoch/pkgver/pkgrel comparison for dependency
+//! requirement checking and version analysis. It matches libalpm's conditional
+//! pkgrel behavior while preserving the resolver's existing pkgver segmentation.
 
 use std::cmp::Ordering;
 
-/// What: Normalize a version string by stripping the pkgrel suffix.
+/// What: Split an Arch package version into epoch and remaining version text.
 ///
 /// Inputs:
-/// - `version`: Version string that may include pkgrel (e.g., "1.2.3-1").
+/// - `version`: A version that may begin with a numeric `epoch:` prefix.
 ///
 /// Output:
-/// - Returns a normalized version string with pkgrel removed.
+/// - Returns the parsed epoch and the remaining `pkgver-pkgrel` text.
 ///
 /// Details:
-/// - Strips everything after the last `-` if it's followed by digits only.
-/// - Preserves text suffixes (e.g., "1.2.3-alpha" remains unchanged).
-/// - Used internally for consistent version comparisons.
-fn normalize_version(version: &str) -> String {
-    // Find the last dash
-    if let Some(last_dash) = version.rfind('-') {
-        // Check if everything after the dash is numeric
-        let suffix = &version[last_dash + 1..];
-        if suffix.chars().all(|c| c.is_ascii_digit()) {
-            // It's a pkgrel, strip it
-            return version[..last_dash].to_string();
-        }
-    }
-    version.to_string()
+/// - Missing or malformed epochs are treated as epoch zero without discarding version text.
+fn split_epoch(version: &str) -> (u64, &str) {
+    version
+        .split_once(':')
+        .and_then(|(epoch, rest)| {
+            (!rest.is_empty())
+                .then(|| epoch.parse::<u64>().ok().map(|epoch| (epoch, rest)))
+                .flatten()
+        })
+        .unwrap_or((0, version))
 }
 
-/// What: Compare two version strings using pacman-compatible algorithm.
+/// What: Split an Arch package version into pkgver and numeric pkgrel.
 ///
 /// Inputs:
-/// - `a`: Left-hand version string.
-/// - `b`: Right-hand version string.
+/// - `version`: Version text without an epoch prefix.
 ///
 /// Output:
-/// - Returns `Ordering::Less` if `a < b`.
-/// - Returns `Ordering::Equal` if `a == b`.
-/// - Returns `Ordering::Greater` if `a > b`.
+/// - Returns pkgver and an optional numeric pkgrel.
 ///
 /// Details:
-/// - Splits versions on `.` and `-` into segments.
-/// - Compares segments pairwise:
-///   - If both are numeric: compares as numbers.
-///   - If one is numeric and one is text: numeric < text (pacman behavior).
-///   - If both are text: lexicographic comparison.
-/// - Missing segments are treated as "0".
-/// - First non-equal segment determines the result.
-/// - This algorithm matches pacman's `alpm_version_cmp` behavior.
+/// - Only a final numeric `-pkgrel` suffix is split; textual prerelease suffixes remain pkgver.
+/// - A missing pkgrel remains `None` because libalpm compares pkgrel only when both versions
+///   declare one.
+fn split_pkgrel(version: &str) -> (&str, Option<&str>) {
+    version
+        .rsplit_once('-')
+        .and_then(|(pkgver, pkgrel)| {
+            (!pkgver.is_empty()
+                && !pkgrel.is_empty()
+                && pkgrel.chars().all(|character| character.is_ascii_digit()))
+            .then_some((pkgver, Some(pkgrel)))
+        })
+        .unwrap_or((version, None))
+}
+
+/// What: Normalize a version string to its pkgver component.
+///
+/// Inputs:
+/// - `version`: A version that may contain epoch and pkgrel components.
+///
+/// Output:
+/// - Returns pkgver without epoch or numeric pkgrel.
+///
+/// Details:
+/// - This helper is only used for major-version presentation logic; full comparison retains epoch
+///   and pkgrel through `compare_versions`.
+fn normalize_version(version: &str) -> String {
+    let (_, without_epoch) = split_epoch(version);
+    split_pkgrel(without_epoch).0.to_string()
+}
+
+/// What: Compare two pkgver-like strings by Arch-compatible numeric and text segments.
+///
+/// Inputs:
+/// - `left`: Left pkgver or pkgrel string.
+/// - `right`: Right pkgver or pkgrel string.
+///
+/// Output:
+/// - Returns lexical/numeric ordering for the first different segment.
+///
+/// Details:
+/// - Missing segments are zero and an empty text suffix sorts after a non-empty suffix, matching
+///   the existing resolver's prerelease behavior.
+fn compare_version_components(left: &str, right: &str) -> Ordering {
+    let left_parts = left.split(['.', '-']).collect::<Vec<_>>();
+    let right_parts = right.split(['.', '-']).collect::<Vec<_>>();
+    for index in 0..left_parts.len().max(right_parts.len()) {
+        let left_segment = left_parts.get(index).copied().unwrap_or("0");
+        let right_segment = right_parts.get(index).copied().unwrap_or("0");
+        let left_end = left_segment
+            .char_indices()
+            .find(|(_, character)| !character.is_ascii_digit())
+            .map_or(left_segment.len(), |(index, _)| index);
+        let right_end = right_segment
+            .char_indices()
+            .find(|(_, character)| !character.is_ascii_digit())
+            .map_or(right_segment.len(), |(index, _)| index);
+        let (left_number, left_suffix) = (&left_segment[..left_end], &left_segment[left_end..]);
+        let (right_number, right_suffix) =
+            (&right_segment[..right_end], &right_segment[right_end..]);
+        let ordering = match (left_number.parse::<u64>(), right_number.parse::<u64>()) {
+            (Ok(left_number), Ok(right_number)) => left_number.cmp(&right_number),
+            (Ok(_), Err(_)) => Ordering::Less,
+            (Err(_), Ok(_)) => Ordering::Greater,
+            (Err(_), Err(_)) => left_segment.cmp(right_segment),
+        };
+        if ordering != Ordering::Equal {
+            return ordering;
+        }
+        match (left_suffix.is_empty(), right_suffix.is_empty()) {
+            (true, false) => return Ordering::Greater,
+            (false, true) => return Ordering::Less,
+            (false, false) if left_suffix != right_suffix => return left_suffix.cmp(right_suffix),
+            _ => {}
+        }
+    }
+    Ordering::Equal
+}
+
+/// What: Compare two Arch package versions including epoch, pkgver, and pkgrel.
+///
+/// Inputs:
+/// - `a`: Left-hand package version.
+/// - `b`: Right-hand package version.
+///
+/// Output:
+/// - Returns `Ordering::Less`, `Ordering::Equal`, or `Ordering::Greater`.
+///
+/// Details:
+/// - Numeric epoch takes precedence, followed by pkgver. Numeric pkgrel is compared only when
+///   both operands declare one, matching libalpm/pacman dependency semantics.
 ///
 /// # Example
 ///
@@ -58,83 +134,27 @@ fn normalize_version(version: &str) -> String {
 /// use arch_toolkit::deps::compare_versions;
 /// use std::cmp::Ordering;
 ///
-/// assert_eq!(compare_versions("1.2.3", "1.2.4"), Ordering::Less);
-/// assert_eq!(compare_versions("2.0.0", "1.9.9"), Ordering::Greater);
-/// assert_eq!(compare_versions("1.0", "1.0.0"), Ordering::Equal);
-/// assert_eq!(compare_versions("1.2.3alpha", "1.2.3beta"), Ordering::Less);
-/// assert_eq!(compare_versions("1.2.3", "1.2.3alpha"), Ordering::Greater);
+/// assert_eq!(compare_versions("1:1.2.3-2", "1:1.2.3-1"), Ordering::Greater);
+/// assert_eq!(compare_versions("2:1.0-1", "1:99.0-9"), Ordering::Greater);
 /// ```
 #[must_use]
 pub fn compare_versions(a: &str, b: &str) -> Ordering {
-    let a_normalized = normalize_version(a);
-    let b_normalized = normalize_version(b);
-
-    let a_parts: Vec<&str> = a_normalized.split(['.', '-']).collect();
-    let b_parts: Vec<&str> = b_normalized.split(['.', '-']).collect();
-    let len = a_parts.len().max(b_parts.len());
-
-    for idx in 0..len {
-        let a_seg = a_parts.get(idx).copied().unwrap_or("0");
-        let b_seg = b_parts.get(idx).copied().unwrap_or("0");
-
-        // Extract numeric prefix from each segment
-        let a_num_end = a_seg
-            .char_indices()
-            .find(|(_, c)| !c.is_ascii_digit())
-            .map_or(a_seg.len(), |(i, _)| i);
-        let b_num_end = b_seg
-            .char_indices()
-            .find(|(_, c)| !c.is_ascii_digit())
-            .map_or(b_seg.len(), |(i, _)| i);
-
-        let a_num_str = &a_seg[..a_num_end];
-        let b_num_str = &b_seg[..b_num_end];
-        let a_suffix = &a_seg[a_num_end..];
-        let b_suffix = &b_seg[b_num_end..];
-
-        // Try to parse numeric prefixes
-        match (a_num_str.parse::<i64>(), b_num_str.parse::<i64>()) {
-            (Ok(a_num), Ok(b_num)) => {
-                // Both have numeric prefixes, compare numbers first
-                match a_num.cmp(&b_num) {
-                    Ordering::Equal => {
-                        // Numeric prefixes equal, compare suffixes
-                        // Empty suffix > non-empty suffix (pacman: "3" > "3alpha")
-                        match (a_suffix.is_empty(), b_suffix.is_empty()) {
-                            (true, true) => {}                         // Both empty, continue
-                            (true, false) => return Ordering::Greater, // "3" > "3alpha"
-                            (false, true) => return Ordering::Less,    // "3alpha" < "3"
-                            (false, false) => {
-                                // Both have suffixes, compare lexicographically
-                                match a_suffix.cmp(b_suffix) {
-                                    Ordering::Equal => {}
-                                    ord => return ord,
-                                }
-                            }
-                        }
-                    }
-                    ord => return ord,
-                }
-            }
-            (Ok(_), Err(_)) => {
-                // a has numeric prefix, b doesn't: numeric < text (pacman behavior)
-                return Ordering::Less;
-            }
-            (Err(_), Ok(_)) => {
-                // a doesn't have numeric prefix, b does: text > numeric (pacman behavior)
-                return Ordering::Greater;
-            }
-            (Err(_), Err(_)) => {
-                // Neither has numeric prefix, compare lexicographically
-                match a_seg.cmp(b_seg) {
-                    Ordering::Equal => {}
-                    ord => return ord,
-                }
-            }
-        }
+    let (a_epoch, a_without_epoch) = split_epoch(a);
+    let (b_epoch, b_without_epoch) = split_epoch(b);
+    let epoch_ordering = a_epoch.cmp(&b_epoch);
+    if epoch_ordering != Ordering::Equal {
+        return epoch_ordering;
     }
-
-    Ordering::Equal
+    let (a_pkgver, a_pkgrel) = split_pkgrel(a_without_epoch);
+    let (b_pkgver, b_pkgrel) = split_pkgrel(b_without_epoch);
+    let pkgver_ordering = compare_version_components(a_pkgver, b_pkgver);
+    if pkgver_ordering != Ordering::Equal {
+        return pkgver_ordering;
+    }
+    match (a_pkgrel, b_pkgrel) {
+        (Some(a_pkgrel), Some(b_pkgrel)) => compare_version_components(a_pkgrel, b_pkgrel),
+        _ => Ordering::Equal,
+    }
 }
 
 /// What: Check if a version satisfies a version requirement.
@@ -151,7 +171,7 @@ pub fn compare_versions(a: &str, b: &str) -> Ordering {
 /// Details:
 /// - Supports operators: `>=`, `<=`, `=`, `>`, `<`.
 /// - Uses `compare_versions()` for proper version comparison (not string comparison).
-/// - Automatically normalizes versions (strips pkgrel) before comparison.
+/// - Matches libalpm by comparing pkgrel only when both operands declare one.
 /// - Empty or invalid requirement strings default to `true` (no constraint).
 ///
 /// # Example
@@ -306,12 +326,40 @@ mod tests {
         assert_eq!(compare_versions("1.2", "1.2.1"), Ordering::Less);
     }
 
+    /// What: Verify pkgrel participates in full Arch package version ordering.
+    ///
+    /// Inputs:
+    /// - Fixed versions with equal pkgver and different numeric pkgrel values.
+    ///
+    /// Output:
+    /// - Confirms pkgrel breaks pkgver ties without overriding pkgver ordering.
+    ///
+    /// Details:
+    /// - Libalpm compares pkgrel only when both operands declare one.
     #[test]
     fn test_compare_versions_pkgrel() {
-        // Pkgrel should be stripped before comparison
-        assert_eq!(compare_versions("1.2.3-1", "1.2.3-2"), Ordering::Equal);
+        assert_eq!(compare_versions("1.2.3-1", "1.2.3-2"), Ordering::Less);
         assert_eq!(compare_versions("1.2.3-1", "1.2.3"), Ordering::Equal);
+        assert_eq!(compare_versions("1.2.3", "1.2.3-1"), Ordering::Equal);
         assert_eq!(compare_versions("1.2.3-10", "1.2.4-1"), Ordering::Less);
+    }
+
+    /// What: Verify epoch precedes pkgver and pkgrel ordering.
+    ///
+    /// Inputs:
+    /// - Fixed versions with different epochs and release values.
+    ///
+    /// Output:
+    /// - Confirms epoch-aware comparisons and requirements are deterministic.
+    ///
+    /// Details:
+    /// - A higher epoch wins even when its pkgver is lexically lower.
+    #[test]
+    fn test_compare_versions_epoch() {
+        assert_eq!(compare_versions("2:1.0-1", "1:99.0-9"), Ordering::Greater);
+        assert_eq!(compare_versions("1:1.0-1", "1.0-99"), Ordering::Greater);
+        assert!(version_satisfies("1:2.0-3", ">=1:2.0-3"));
+        assert!(!version_satisfies("1:2.0-2", ">=1:2.0-3"));
     }
 
     #[test]
@@ -400,13 +448,23 @@ mod tests {
         assert!(version_satisfies("1.0", "some-text"));
     }
 
+    /// What: Verify pkgrel-aware dependency requirement checks.
+    ///
+    /// Inputs:
+    /// - Fixed package versions and requirements containing numeric release suffixes.
+    ///
+    /// Output:
+    /// - Confirms requirements retain release precision.
+    ///
+    /// Details:
+    /// - An absent pkgrel compares equal to a matching pkgver, while two explicit releases retain
+    ///   their ordering.
     #[test]
     fn test_version_satisfies_pkgrel() {
-        // Pkgrel should be normalized before comparison
-        assert!(version_satisfies("1.2.3-1", ">=1.2.3"));
+        assert!(version_satisfies("1.2.3-1", "=1.2.3"));
+        assert!(version_satisfies("1.2.3", "<=1.2.3-1"));
         assert!(version_satisfies("1.2.3-10", ">=1.2.3"));
-        assert!(version_satisfies("1.2.3", ">=1.2.3-1"));
-        assert!(version_satisfies("1.2.3-5", "=1.2.3-1")); // Both normalized to 1.2.3
+        assert!(!version_satisfies("1.2.3-5", "=1.2.3-1"));
     }
 
     #[test]

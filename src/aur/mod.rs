@@ -6,6 +6,8 @@ mod comments;
 mod info;
 #[cfg(feature = "aur")]
 mod mock;
+#[cfg(all(feature = "aur", feature = "index"))]
+mod official;
 #[cfg(feature = "aur")]
 mod pkgbuild;
 #[cfg(feature = "aur")]
@@ -24,8 +26,17 @@ use crate::error::Result;
 #[cfg(feature = "aur")]
 use crate::types::{AurComment, AurPackage, AurPackageDetails};
 
+#[cfg(all(feature = "aur", feature = "index"))]
+pub use crate::types::package::{
+    MetadataFetchLimits, MirrorHealth, MirrorHealthLimits, MirrorHealthStatus,
+};
 #[cfg(feature = "aur")]
 pub use mock::MockAurApi;
+#[cfg(all(feature = "aur", feature = "index"))]
+pub use official::{
+    ARCH_PACKAGE_SEARCH_URL, check_mirror_health, fetch_arch_package_detail,
+    fetch_official_package_detail_from,
+};
 #[cfg(feature = "aur")]
 pub use traits::AurApi;
 
@@ -74,7 +85,10 @@ impl<'a> Aur<'a> {
     ///
     /// Details:
     /// - Uses AUR RPC v5 search endpoint.
-    /// - Limits results to 200 packages (AUR default).
+    /// - Returns the full result array supplied by AUR RPC without assuming an
+    ///   upstream 200-result cap or unsupported pagination parameter.
+    /// - Use [`Aur::search_with_limit`] when the caller needs an explicit,
+    ///   deterministic client-side result cap.
     /// - Percent-encodes the query string for URL safety.
     /// - Applies rate limiting for archlinux.org requests.
     /// - Returns empty vector if no results found (not an error).
@@ -84,6 +98,33 @@ impl<'a> Aur<'a> {
     /// - Returns `Err(ArchToolkitError::InvalidInput)` if the URL is not from archlinux.org
     pub async fn search(&self, query: &str) -> Result<Vec<AurPackage>> {
         search::search(self.client, query).await
+    }
+
+    /// What: Search AUR packages with an explicit caller-selected result cap.
+    ///
+    /// Inputs:
+    /// - `query`: Search query string.
+    /// - `maximum_results`: Non-zero maximum number of returned package rows.
+    ///
+    /// Output:
+    /// - At most `maximum_results` AUR package rows, in the RPC response order.
+    ///
+    /// Details:
+    /// - The cap is applied only after one normal AUR RPC response is fetched;
+    ///   it does not claim server-side pagination or an upstream result limit.
+    /// - [`Aur::search`] remains uncapped so callers can make their own bounded
+    ///   display/storage choice.
+    /// - The client cache retains the complete fetched array, so different
+    ///   caller limits do not make cache contents depend on call order.
+    ///
+    /// # Errors
+    /// - Returns the same validation, network, and parsing errors as [`Aur::search`].
+    pub async fn search_with_limit(
+        &self,
+        query: &str,
+        maximum_results: std::num::NonZeroUsize,
+    ) -> Result<Vec<AurPackage>> {
+        search::search_with_limit(self.client, query, maximum_results).await
     }
 
     /// What: Fetch detailed information for one or more AUR packages.

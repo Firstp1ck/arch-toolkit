@@ -116,21 +116,32 @@ pub use crate::types::{
 };
 
 #[cfg(feature = "deps")]
+pub use crate::types::dependency::{
+    DependencyConstraintRange, DependencyGraphConfig, DependencyGraphDiagnostic,
+    DependencyGraphDiagnosticKind, DependencyGraphEdge, DependencyGraphNode,
+    DependencyGraphNodeStatus, DependencyGraphResolution, DependencyMetadata,
+    DependencyMetadataResponse, DependencyProvenance, DependencyVersionBound,
+};
+
+#[cfg(feature = "deps")]
 pub use crate::deps::{
-    DependencyResolution, DependencyResolver, ResolverConfig, ReverseDependencyAnalyzer,
-    ReverseDependencyReport, get_installed_packages, parse_dep_spec, version_satisfies,
+    DependencyMetadataProvider, DependencyResolution, DependencyResolver, ResolverConfig,
+    ReverseDependencyAnalyzer, ReverseDependencyReport, get_installed_packages, parse_dep_spec,
+    version_satisfies,
 };
 
 // Index types and functions
 #[cfg(feature = "index")]
 pub use crate::types::index::{
-    IndexQueryResult, InstalledPackagesMode, OfficialIndex, OfficialPackage,
+    IndexQueryResult, InstalledPackagesMode, MirrorDiscoveryLimits, MirrorInfo, OfficialIndex,
+    OfficialPackage,
 };
 
 #[cfg(feature = "index")]
 pub use crate::index::{
-    detect_enabled_repos, fetch_official_index, fetch_official_index_for_repos, load_from_disk,
-    load_from_disk_or_default, save_to_disk, search_official,
+    IndexRefreshHandle, detect_enabled_repos, fetch_arch_mirrors, fetch_mirrors_from,
+    fetch_official_index, fetch_official_index_for_repos, generate_mirrorlist, load_from_disk,
+    load_from_disk_or_default, save_to_disk, search_official, spawn_index_refresh,
 };
 
 // Install types and functions
@@ -152,11 +163,29 @@ pub use crate::install::{
 pub use crate::types::news::{AdvisorySeverity, ArchNewsItem, SecurityAdvisory};
 
 #[cfg(feature = "news")]
-pub use crate::news::{fetch_arch_news, fetch_security_advisories};
+pub use crate::news::{
+    FeedCache, InMemoryFeedCache, extract_article_text, fetch_arch_news, fetch_arch_news_cached,
+    fetch_article_text, fetch_security_advisories, fetch_security_advisories_cached,
+};
 
 // Sandbox types and functions
 #[cfg(feature = "sandbox")]
-pub use crate::types::sandbox::{DependencyDelta, SandboxInfo};
+pub use crate::types::sandbox::{
+    DependencyDelta, SandboxAnalysisLimitation, SandboxFinding, SandboxInfo, SandboxRuleId,
+    SandboxStaticAnalysis,
+};
 
 #[cfg(feature = "sandbox")]
-pub use crate::sandbox::{analyze_pkgbuild, analyze_srcinfo};
+pub use crate::sandbox::{analyze_pkgbuild, analyze_pkgbuild_security, analyze_srcinfo};
+
+// Official metadata and mirror-health capability types/functions
+#[cfg(all(feature = "aur", feature = "index"))]
+pub use crate::aur::{
+    ARCH_PACKAGE_SEARCH_URL, check_mirror_health, fetch_arch_package_detail,
+    fetch_official_package_detail_from,
+};
+
+#[cfg(all(feature = "aur", feature = "index"))]
+pub use crate::types::package::{
+    MetadataFetchLimits, MirrorHealth, MirrorHealthLimits, MirrorHealthStatus,
+};

@@ -19,12 +19,13 @@ fn main() {
 }
 
 #[cfg(feature = "index")]
+#[tokio::main]
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-fn main() -> arch_toolkit::error::Result<()> {
+async fn main() -> arch_toolkit::error::Result<()> {
     use arch_toolkit::index::{
-        InstalledPackagesMode, all_official, fetch_official_index, get_installed_packages,
-        is_explicit, is_installed, load_from_disk, refresh_explicit_cache, refresh_installed_cache,
-        save_to_disk, search_official,
+        InstalledPackagesMode, MirrorInfo, all_official, fetch_official_index, generate_mirrorlist,
+        get_installed_packages, is_explicit, is_installed, load_from_disk, refresh_explicit_cache,
+        refresh_installed_cache, save_to_disk, search_official, spawn_index_refresh,
     };
     use std::collections::HashSet;
 
@@ -130,6 +131,29 @@ fn main() -> arch_toolkit::error::Result<()> {
     let reloaded = load_from_disk(&path).or_else(|_| fetch_official_index())?;
     println!("Reloaded {} packages from disk", reloaded.pkgs.len());
     let _ = std::fs::remove_file(&path);
+    println!();
+
+    // Example 8: Generate a mirrorlist without modifying system configuration.
+    println!("8. Mirrorlist Generation");
+    println!("------------------------");
+    let mirrors = [MirrorInfo {
+        url: "https://mirror.example.invalid/".to_string(),
+        active: true,
+        protocols: vec!["https".to_string()],
+    }];
+    let mirrorlist = generate_mirrorlist(&mirrors, 8)?;
+    print!("{mirrorlist}");
+    println!();
+
+    // Example 9: Background refresh with explicit result delivery.
+    println!("9. Cancellable Background Refresh");
+    println!("---------------------------------");
+    let refresh = spawn_index_refresh(async { Ok(demo_index()) });
+    let refreshed = refresh.wait().await?;
+    println!(
+        "Background refresh returned {} packages",
+        refreshed.pkgs.len()
+    );
     println!();
 
     println!("=== All examples completed ===");

@@ -36,160 +36,185 @@ use crate::deps::parse::parse_dep_spec;
 #[allow(clippy::case_sensitive_file_extension_comparisons)]
 #[must_use]
 pub fn parse_pkgbuild_deps(pkgbuild: &str) -> (Vec<String>, Vec<String>, Vec<String>, Vec<String>) {
-    let mut depends = Vec::new();
-    let mut makedepends = Vec::new();
-    let mut checkdepends = Vec::new();
-    let mut optdepends = Vec::new();
-
-    // Use HashSet for deduplication
-    let mut seen_depends = HashSet::new();
-    let mut seen_makedepends = HashSet::new();
-    let mut seen_checkdepends = HashSet::new();
-    let mut seen_optdepends = HashSet::new();
-
     let lines: Vec<&str> = pkgbuild.lines().collect();
-    let mut i = 0;
+    let mut index = 0;
+    let mut fields = DependencyFields::default();
 
-    while i < lines.len() {
-        let line = lines[i].trim();
-        i += 1;
-
-        if line.is_empty() || line.starts_with('#') {
+    while index < lines.len() {
+        let line = lines[index].trim();
+        index += 1;
+        let Some((key, value)) = dependency_declaration(line) else {
             continue;
-        }
+        };
+        let values = parse_declared_array(value, &lines, &mut index);
+        fields.extend(key, values);
+    }
 
-        // Parse array declarations: depends=('foo' 'bar') or depends=( or depends+=('foo' 'bar')
-        if let Some((key, value)) = line.split_once('=') {
-            let key = key.trim();
+    fields.into_parts()
+}
+
+/// What: Dependency field selected by a PKGBUILD array declaration.
+///
+/// Inputs:
+/// - Produced by [`dependency_declaration`].
+///
+/// Output:
+/// - Selects one of the four dependency vectors.
+///
+/// Details:
+/// - Keeps field dispatch separate from parsing so the main parser remains below complexity limits.
+#[derive(Clone, Copy)]
+enum DependencyField {
+    /// Runtime dependencies.
+    Runtime,
+    /// Build-time dependencies.
+    Make,
+    /// Test dependencies.
+    Check,
+    /// Optional runtime integrations.
+    Optional,
+}
+
+/// What: Accumulate parsed dependency fields while preserving insertion order.
+///
+/// Inputs:
+/// - Populated by [`DependencyFields::extend`].
+///
+/// Output:
+/// - Four deduplicated dependency vectors.
+///
+/// Details:
+/// - Each field owns an independent seen set because the same package may validly occur in
+///   different dependency categories.
+#[derive(Default)]
+struct DependencyFields {
+    /// Runtime dependencies and their deduplication set.
+    depends: (Vec<String>, HashSet<String>),
+    /// Build dependencies and their deduplication set.
+    makedepends: (Vec<String>, HashSet<String>),
+    /// Test dependencies and their deduplication set.
+    checkdepends: (Vec<String>, HashSet<String>),
+    /// Optional dependencies and their deduplication set.
+    optdepends: (Vec<String>, HashSet<String>),
+}
+
+impl DependencyFields {
+    /// What: Add valid, unique values to one dependency field.
+    ///
+    /// Inputs:
+    /// - `field`: Destination dependency category.
+    /// - `values`: Raw array values parsed from the declaration.
+    ///
+    /// Output:
+    /// - Updates this accumulator in declaration order.
+    ///
+    /// Details:
+    /// - Invalid names and shared-library dependency tokens retain the historical filtering policy.
+    fn extend(&mut self, field: DependencyField, values: Vec<String>) {
+        let destination = match field {
+            DependencyField::Runtime => &mut self.depends,
+            DependencyField::Make => &mut self.makedepends,
+            DependencyField::Check => &mut self.checkdepends,
+            DependencyField::Optional => &mut self.optdepends,
+        };
+        for value in values {
             let value = value.trim();
-
-            // Handle both depends= and depends+= patterns
-            let base_key = key.strip_suffix('+').map_or(key, |stripped| stripped);
-
-            // Only parse specific dependency fields, ignore other PKGBUILD fields
-            if !matches!(
-                base_key,
-                "depends" | "makedepends" | "checkdepends" | "optdepends"
-            ) {
-                continue;
-            }
-
-            // Check if this is an array declaration
-            if value.starts_with('(') {
-                let deps = find_matching_closing_paren(value).map_or_else(
-                    || {
-                        // Multi-line array: depends=(
-                        //     'foo'
-                        //     'bar'
-                        // )
-                        let mut array_lines = Vec::new();
-                        // Content may follow the opening parenthesis on the
-                        // declaration line: depends=('foo'
-                        let first = value[1..].trim();
-                        if !first.is_empty() && !first.starts_with('#') {
-                            array_lines.push(first.to_string());
-                        }
-                        // Collect lines until we find the closing parenthesis
-                        while i < lines.len() {
-                            let next_line = lines[i].trim();
-                            i += 1;
-
-                            // Skip empty lines and comments
-                            if next_line.is_empty() || next_line.starts_with('#') {
-                                continue;
-                            }
-
-                            // Check if this line closes the array
-                            if next_line == ")" {
-                                break;
-                            }
-
-                            // Check if this line contains a closing parenthesis (may be on same line as content)
-                            if let Some(paren_pos) = next_line.find(')') {
-                                // Extract content before the closing paren
-                                let content_before_paren = &next_line[..paren_pos].trim();
-                                if !content_before_paren.is_empty() {
-                                    array_lines.push((*content_before_paren).to_string());
-                                }
-                                break;
-                            }
-
-                            // Add this line to the array content
-                            array_lines.push(next_line.to_string());
-                        }
-
-                        // Parse all collected lines as array content
-                        // Ensure proper spacing between items (each line should be a separate item)
-                        let array_content = array_lines
-                            .iter()
-                            .map(|s| s.trim())
-                            .filter(|s| !s.is_empty())
-                            .collect::<Vec<_>>()
-                            .join(" ");
-                        parse_array_content(&array_content)
-                    },
-                    |closing_paren_pos| {
-                        // Single-line array (may have content after closing paren): depends=('foo' 'bar') or depends+=('foo' 'bar') other_code
-                        let array_content = &value[1..closing_paren_pos];
-                        parse_array_content(array_content)
-                    },
-                );
-
-                // Filter out invalid dependencies (.so files, invalid names, etc.)
-                let filtered_deps: Vec<String> = deps
-                    .into_iter()
-                    .filter_map(|dep| {
-                        let dep_trimmed = dep.trim();
-                        if dep_trimmed.is_empty() {
-                            return None;
-                        }
-
-                        if is_valid_dependency(dep_trimmed) {
-                            Some(dep_trimmed.to_string())
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-
-                // Add dependencies to the appropriate vector (using base_key to handle both = and +=)
-                // Deduplicate using HashSet
-                match base_key {
-                    "depends" => {
-                        for dep in filtered_deps {
-                            if seen_depends.insert(dep.clone()) {
-                                depends.push(dep);
-                            }
-                        }
-                    }
-                    "makedepends" => {
-                        for dep in filtered_deps {
-                            if seen_makedepends.insert(dep.clone()) {
-                                makedepends.push(dep);
-                            }
-                        }
-                    }
-                    "checkdepends" => {
-                        for dep in filtered_deps {
-                            if seen_checkdepends.insert(dep.clone()) {
-                                checkdepends.push(dep);
-                            }
-                        }
-                    }
-                    "optdepends" => {
-                        for dep in filtered_deps {
-                            if seen_optdepends.insert(dep.clone()) {
-                                optdepends.push(dep);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
+            if !value.is_empty() && is_valid_dependency(value) && destination.1.insert(value.into())
+            {
+                destination.0.push(value.into());
             }
         }
     }
 
-    (depends, makedepends, checkdepends, optdepends)
+    /// What: Consume the accumulator and return the public parser tuple.
+    ///
+    /// Inputs:
+    /// - `self`: Completed dependency accumulator.
+    ///
+    /// Output:
+    /// - Runtime, make, check, and optional dependency vectors in that order.
+    ///
+    /// Details:
+    /// - Preserves the existing public return type and ordering contract.
+    fn into_parts(self) -> (Vec<String>, Vec<String>, Vec<String>, Vec<String>) {
+        (
+            self.depends.0,
+            self.makedepends.0,
+            self.checkdepends.0,
+            self.optdepends.0,
+        )
+    }
+}
+
+/// What: Parse a dependency-array declaration header.
+///
+/// Inputs:
+/// - `line`: Trimmed PKGBUILD source line.
+///
+/// Output:
+/// - The selected field and array value, or `None` for comments, blanks, and unrelated fields.
+///
+/// Details:
+/// - Supports both assignment and append forms such as `depends=` and `depends+=`.
+fn dependency_declaration(line: &str) -> Option<(DependencyField, &str)> {
+    if line.is_empty() || line.starts_with('#') {
+        return None;
+    }
+    let (key, value) = line.split_once('=')?;
+    let field = match key.trim().strip_suffix('+').unwrap_or_else(|| key.trim()) {
+        "depends" => DependencyField::Runtime,
+        "makedepends" => DependencyField::Make,
+        "checkdepends" => DependencyField::Check,
+        "optdepends" => DependencyField::Optional,
+        _ => return None,
+    };
+    value
+        .trim()
+        .starts_with('(')
+        .then_some((field, value.trim()))
+}
+
+/// What: Parse one single-line or multiline PKGBUILD array declaration.
+///
+/// Inputs:
+/// - `value`: Declaration text beginning with `(`.
+/// - `lines`: Complete PKGBUILD line list.
+/// - `index`: Cursor positioned after the declaration line.
+///
+/// Output:
+/// - Raw array values parsed by [`parse_array_content`].
+///
+/// Details:
+/// - Advances `index` through a multiline declaration and retains content before a closing `)`.
+fn parse_declared_array(value: &str, lines: &[&str], index: &mut usize) -> Vec<String> {
+    if let Some(closing) = find_matching_closing_paren(value) {
+        return parse_array_content(&value[1..closing]);
+    }
+
+    let mut parts = Vec::new();
+    let first = value[1..].trim();
+    if !first.is_empty() && !first.starts_with('#') {
+        parts.push(first.to_string());
+    }
+    while *index < lines.len() {
+        let line = lines[*index].trim();
+        *index += 1;
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if line == ")" {
+            break;
+        }
+        if let Some(closing) = line.find(')') {
+            let content = line[..closing].trim();
+            if !content.is_empty() {
+                parts.push(content.to_string());
+            }
+            break;
+        }
+        parts.push(line.to_string());
+    }
+    parse_array_content(&parts.join(" "))
 }
 
 /// What: Parse conflicts from PKGBUILD content.

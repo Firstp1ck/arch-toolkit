@@ -393,6 +393,352 @@ pub struct SrcinfoData {
     pub replaces: Vec<String>,
 }
 
+/// What: Carry raw `.SRCINFO` metadata returned by an injected graph metadata provider.
+///
+/// Inputs:
+/// - Requested name, selected actual package, verified source, and raw `.SRCINFO` text.
+///
+/// Output:
+/// - Supplies enough information to resolve direct and virtual dependencies without a crate-level
+///   AUR or HTTP dependency.
+///
+/// Details:
+/// - `package_name` must name the selected split-package output. If it differs from
+///   `requested_name`, the resolver verifies that the selected output provides the requested name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DependencyMetadata {
+    /// Package or virtual name queried from the provider.
+    pub requested_name: String,
+    /// Actual selected package name, including a split-package output when applicable.
+    pub package_name: String,
+    /// Verified source supplied by the metadata provider.
+    pub source: DependencySource,
+    /// Raw `.SRCINFO` text for the containing package base.
+    pub srcinfo: String,
+}
+
+impl DependencyMetadata {
+    /// What: Construct injected raw metadata for one requested package or provider.
+    ///
+    /// Inputs:
+    /// - `requested_name`: Queried package or virtual name.
+    /// - `package_name`: Selected actual package output.
+    /// - `source`: Verified source of the selected package.
+    /// - `srcinfo`: Raw `.SRCINFO` package-base metadata.
+    ///
+    /// Output:
+    /// - Returns a metadata record suitable for `DependencyMetadataProvider`.
+    ///
+    /// Details:
+    /// - This constructor performs no I/O or parsing so deterministic fixtures can use it directly.
+    #[must_use]
+    pub fn new(
+        requested_name: impl Into<String>,
+        package_name: impl Into<String>,
+        source: DependencySource,
+        srcinfo: impl Into<String>,
+    ) -> Self {
+        Self {
+            requested_name: requested_name.into(),
+            package_name: package_name.into(),
+            source,
+            srcinfo: srcinfo.into(),
+        }
+    }
+}
+
+/// What: Describe a batched injected metadata-provider result.
+///
+/// Inputs:
+/// - A requested name and either returned metadata, an absence reason, or a retrieval failure.
+///
+/// Output:
+/// - Lets graph resolution retain partial results and report actionable diagnostics.
+///
+/// Details:
+/// - Provider failures are non-fatal for sibling branches and never cause fallback AUR inference.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DependencyMetadataResponse {
+    /// Verified metadata was returned for a requested package or virtual dependency.
+    Found(DependencyMetadata),
+    /// No verified metadata exists for the requested name.
+    Missing {
+        /// Requested package or virtual name.
+        requested_name: String,
+        /// Actionable absence reason.
+        reason: String,
+    },
+    /// Metadata retrieval failed through a network, helper, or provider-specific error.
+    Failure {
+        /// Requested package or virtual name.
+        requested_name: String,
+        /// Actionable provider error message.
+        message: String,
+    },
+}
+
+/// What: Identify the source and requested/provider identity behind a graph node.
+///
+/// Inputs:
+/// - The requested dependency name, optional verified source, and optional selected provider.
+///
+/// Output:
+/// - Lets callers distinguish direct packages, virtual providers, and unresolved names.
+///
+/// Details:
+/// - `source` is `None` only when metadata is absent or failed. The resolver never infers AUR
+///   provenance merely because an unknown name was not found elsewhere.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DependencyProvenance {
+    /// Original dependency name requested by the parent package.
+    pub requested_name: String,
+    /// Verified source reported by the metadata provider, if metadata was available.
+    pub source: Option<DependencySource>,
+    /// Actual package selected to satisfy a virtual request, if different from the request.
+    pub provider: Option<String>,
+}
+
+/// What: Represent one inclusive or exclusive edge of an intersected version range.
+///
+/// Inputs:
+/// - A version string and whether equality is permitted at that edge.
+///
+/// Output:
+/// - Supplies a lower or upper bound for `DependencyConstraintRange`.
+///
+/// Details:
+/// - Version ordering uses the dependency resolver's epoch/pkgver/pkgrel comparator.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DependencyVersionBound {
+    /// Bound version including epoch and pkgrel when present.
+    pub version: String,
+    /// Whether the bound includes its version value.
+    pub inclusive: bool,
+}
+
+/// What: Store the deterministic intersection of dependency version requirements.
+///
+/// Inputs:
+/// - Zero or more `=`, `>`, `>=`, `<`, or `<=` requirements for one resolved package.
+///
+/// Output:
+/// - Exposes the most restrictive compatible lower and upper bounds.
+///
+/// Details:
+/// - Equal requirements are represented by equal inclusive lower and upper bounds. An absent
+///   bound means no requirement on that side of the interval.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DependencyConstraintRange {
+    /// Most restrictive compatible lower bound, if any.
+    pub lower: Option<DependencyVersionBound>,
+    /// Most restrictive compatible upper bound, if any.
+    pub upper: Option<DependencyVersionBound>,
+}
+
+/// What: Describe the resolution state of a graph node.
+///
+/// Inputs:
+/// - Metadata, provider, and conflict observations made during one graph run.
+///
+/// Output:
+/// - Lets callers identify resolved, missing, and conflicting graph nodes.
+///
+/// Details:
+/// - Missing nodes retain a `DependencyProvenance` with no source rather than being labelled AUR.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DependencyGraphNodeStatus {
+    /// Metadata was parsed and the package can participate in dependency traversal.
+    #[default]
+    Resolved,
+    /// Metadata was unavailable or failed validation for the requested package.
+    Missing,
+    /// The package conflicts with another resolved graph node.
+    Conflicting,
+}
+
+/// What: Represent one deterministic dependency graph node.
+///
+/// Inputs:
+/// - Verified metadata and merged requirements for one actual package.
+///
+/// Output:
+/// - Stores stable node identity, source provenance, split-package base, and selected metadata.
+///
+/// Details:
+/// - `name` is the actual selected package. `provenance.requested_name` retains the virtual or
+///   direct dependency name that selected it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DependencyGraphNode {
+    /// Stable actual package identity used by graph edges.
+    pub name: String,
+    /// Package-base name retained from `.SRCINFO`.
+    pub pkgbase: Option<String>,
+    /// Combined `epoch:pkgver-pkgrel` version, if metadata was parsed.
+    pub version: Option<String>,
+    /// Verified source and provider provenance.
+    pub provenance: DependencyProvenance,
+    /// Current graph node state.
+    pub status: DependencyGraphNodeStatus,
+    /// Intersected requirements targeting this node.
+    pub constraints: DependencyConstraintRange,
+    /// Virtual packages supplied by this node.
+    pub provides: Vec<String>,
+    /// Declared package or virtual conflicts for this node.
+    pub conflicts: Vec<String>,
+    /// Minimum lexical traversal depth at which this node was encountered.
+    pub depth: usize,
+}
+
+/// What: Represent one directed dependency requirement between graph nodes.
+///
+/// Inputs:
+/// - Parent and selected child package names, requested dependency name, and version requirement.
+///
+/// Output:
+/// - Preserves dependency and virtual-provider provenance independently of rendering.
+///
+/// Details:
+/// - Edges are sorted lexically by the resolver and can be rendered without triggering metadata
+///   lookup or changing the resolution result.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DependencyGraphEdge {
+    /// Actual package that declares the dependency.
+    pub from: String,
+    /// Actual selected package, or the missing requested name when metadata is absent.
+    pub to: String,
+    /// Dependency or virtual package name written by the parent.
+    pub requested_name: String,
+    /// Version requirement written by the parent, if present.
+    pub version_req: String,
+}
+
+/// What: Categorize non-fatal graph-resolution diagnostics.
+///
+/// Inputs:
+/// - Metadata, bound, graph, and conflict events observed during resolution.
+///
+/// Output:
+/// - Provides stable categories for actionable caller diagnostics.
+///
+/// Details:
+/// - Diagnostics preserve partial graph results instead of silently omitting failed branches.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DependencyGraphDiagnosticKind {
+    /// Metadata was not available for a requested package or virtual dependency.
+    MissingMetadata,
+    /// The injected provider returned a transport, helper, or other retrieval failure.
+    MetadataFailure,
+    /// Returned `.SRCINFO` text did not contain the selected requested package output.
+    MalformedSrcinfo,
+    /// A dependency path returned to a package already in the active traversal path.
+    Cycle,
+    /// A child exceeded the configured transitive depth.
+    DepthLimit,
+    /// Adding a node exceeded the configured per-run node limit.
+    NodeLimit,
+    /// The provider exceeded the configured metadata timeout.
+    Timeout,
+    /// A dependency requirement used an unsupported operator or omitted its version.
+    MalformedConstraint,
+    /// Multiple valid requirements for one selected package have an empty intersection.
+    IncompatibleConstraints,
+    /// A declared package or virtual conflict matched another resolved node.
+    Conflict,
+    /// A provider returned no response or a response for an unrequested package.
+    MetadataProtocol,
+}
+
+/// What: Record one actionable non-fatal graph-resolution event.
+///
+/// Inputs:
+/// - A diagnostic kind, affected package, optional related package, and message.
+///
+/// Output:
+/// - Lets callers surface partial-resolution limitations without parsing log output.
+///
+/// Details:
+/// - Entries are sorted deterministically by kind, package, related package, and message.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DependencyGraphDiagnostic {
+    /// Stable category for the event.
+    pub kind: DependencyGraphDiagnosticKind,
+    /// Affected package or requested dependency name.
+    pub package: String,
+    /// Related package when the event concerns an edge, cycle, or conflict.
+    pub related_package: Option<String>,
+    /// Actionable detail suitable for caller display.
+    pub message: String,
+}
+
+/// What: Return the bounded, deterministic output of one metadata graph-resolution run.
+///
+/// Inputs:
+/// - Root package references, injected metadata, and graph resolution bounds.
+///
+/// Output:
+/// - Contains lexical roots, nodes, edges, and structured diagnostics.
+///
+/// Details:
+/// - The graph is independent from tree rendering and remains useful when metadata failures leave
+///   partial branches unresolved.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DependencyGraphResolution {
+    /// Requested root package names in lexical order.
+    pub roots: Vec<String>,
+    /// Resolved and missing nodes in lexical order by actual package name.
+    pub nodes: Vec<DependencyGraphNode>,
+    /// Directed edges in lexical order.
+    pub edges: Vec<DependencyGraphEdge>,
+    /// Non-fatal diagnostic events in lexical order.
+    pub diagnostics: Vec<DependencyGraphDiagnostic>,
+}
+
+/// What: Configure bounded metadata graph resolution.
+///
+/// Inputs:
+/// - Maximum transitive depth, graph-node count, metadata timeout, and provider batch concurrency.
+///
+/// Output:
+/// - Limits resource use for one graph-resolution run.
+///
+/// Details:
+/// - Defaults are depth 8, 256 nodes, 10-second metadata timeout, and one provider batch at a
+///   time. The synchronous resolver passes the timeout to the injected provider and keeps only one
+///   batch in flight; providers must honor the timeout for preemptive I/O cancellation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DependencyGraphConfig {
+    /// Maximum edges from a root to a traversed child; zero resolves root metadata only.
+    pub max_depth: usize,
+    /// Maximum unique graph nodes, including roots and missing nodes.
+    pub max_nodes: usize,
+    /// Maximum duration supplied to each metadata provider batch.
+    pub metadata_timeout: std::time::Duration,
+    /// Maximum names supplied in one provider batch; the synchronous resolver runs batches serially.
+    pub max_concurrency: usize,
+}
+
+impl Default for DependencyGraphConfig {
+    /// What: Construct conservative bounds for graph resolution.
+    ///
+    /// Inputs:
+    /// - None.
+    ///
+    /// Output:
+    /// - Returns depth 8, 256 nodes, a 10-second timeout, and serial provider batching.
+    ///
+    /// Details:
+    /// - These defaults constrain fixture and production providers without changing the legacy
+    ///   direct-only `DependencyResolver::resolve` entry point.
+    fn default() -> Self {
+        Self {
+            max_depth: 8,
+            max_nodes: 256,
+            metadata_timeout: std::time::Duration::from_secs(10),
+            max_concurrency: 1,
+        }
+    }
+}
+
 /// Result of dependency resolution operation.
 ///
 /// Contains all resolved dependencies along with any conflicts or missing packages

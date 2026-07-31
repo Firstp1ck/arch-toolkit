@@ -20,7 +20,8 @@ fn main() {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     use arch_toolkit::news::{
-        fetch_arch_news, fetch_security_advisories, normalize_feed_date, parse_arch_news_rss,
+        extract_article_text, fetch_arch_news, fetch_security_advisories, normalize_feed_date,
+        parse_arch_news_rss,
     };
 
     println!("=== Arch Toolkit News Module Examples ===\n");
@@ -84,8 +85,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  {} {}", items[0].date, items[0].title);
     println!();
 
-    // Example 4: Date normalization across feed formats
-    println!("4. Date Normalization");
+    // Example 4: Extract a recorded article without executing HTML.
+    println!("4. Safe Article Extraction");
+    println!("--------------------------");
+    let article = r#"<p>Read <a href="/news/guide/">the guide</a>.</p>
+        <ul><li>Keep packages current</li></ul><pre>pacman -Syu</pre>"#;
+    let text = extract_article_text(article, "https://archlinux.org/news/example/")?;
+    println!("{text}");
+    println!();
+
+    // Example 5: Date normalization across feed formats
+    println!("5. Date Normalization");
     println!("----------------------");
     for raw in [
         "Thu, 21 Aug 2025 12:34:56 +0000",

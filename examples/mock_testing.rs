@@ -240,7 +240,7 @@ makedepends=()
 
     let pkgbuild = pkgbuild_mock.pkgbuild("yay").await?;
     println!("✓ PKGBUILD content (first 100 chars):");
-    println!("  {}\n", &pkgbuild.chars().take(100).collect::<String>());
+    println!("  {}\n", pkgbuild.chars().take(100).collect::<String>());
 
     // ========================================================================
     // Example 7: Complex Mock Configuration

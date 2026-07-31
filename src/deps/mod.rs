@@ -170,6 +170,7 @@
 //! - [`examples/resolve_example.rs`](https://github.com/Firstp1ck/arch-toolkit/blob/main/examples/resolve_example.rs) - Dependency resolution examples
 //! - [`examples/reverse_example.rs`](https://github.com/Firstp1ck/arch-toolkit/blob/main/examples/reverse_example.rs) - Reverse dependency analysis examples
 
+mod graph;
 mod parse;
 mod pkgbuild;
 mod query;
@@ -180,6 +181,7 @@ mod srcinfo;
 mod version;
 
 // Re-export parsing functions
+pub use graph::DependencyMetadataProvider;
 pub use parse::{parse_dep_spec, parse_pacman_si_conflicts, parse_pacman_si_deps};
 pub use pkgbuild::{parse_pkgbuild_conflicts, parse_pkgbuild_deps};
 pub use query::{
@@ -205,5 +207,9 @@ pub use srcinfo::fetch_srcinfo;
 
 // Re-export types from types module
 pub use crate::types::dependency::{
-    DependencyResolution, ResolverConfig, ReverseDependencyReport, ReverseDependencySummary,
+    DependencyConstraintRange, DependencyGraphConfig, DependencyGraphDiagnostic,
+    DependencyGraphDiagnosticKind, DependencyGraphEdge, DependencyGraphNode,
+    DependencyGraphNodeStatus, DependencyGraphResolution, DependencyMetadata,
+    DependencyMetadataResponse, DependencyProvenance, DependencyResolution, DependencyVersionBound,
+    ResolverConfig, ReverseDependencyReport, ReverseDependencySummary,
 };

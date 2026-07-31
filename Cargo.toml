@@ -1,6 +1,6 @@
 [package]
 name = "arch-toolkit"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.91"
 description = "Complete Rust toolkit for Arch Linux package management"
@@ -13,7 +13,7 @@ categories = ["api-bindings", "command-line-utilities"]
 default = ["aur"]
 aur = ["dep:reqwest", "dep:tokio", "dep:scraper", "dep:chrono", "dep:rand", "dep:lru", "dep:async-trait"]
 deps = []  # No additional dependencies for types only
-index = ["dep:tokio"]  # For async operations with spawn_blocking
+index = ["dep:tokio", "dep:reqwest"]  # Async refresh and caller-client mirror discovery
 install = ["deps"]  # Installation command building (uses deps types)
 news = ["dep:reqwest", "dep:tokio", "dep:chrono"]  # Arch news RSS and security advisories
 sandbox = ["deps"]  # Build-preflight dependency analysis (uses deps parsers)

@@ -1,6 +1,6 @@
 //! Security advisory Atom feed fetching and parsing (security.archlinux.org).
 
-use crate::error::{ArchToolkitError, Result};
+use crate::error::Result;
 use crate::types::news::{AdvisorySeverity, SecurityAdvisory};
 
 use super::arch::{extract_between, unescape_xml};
@@ -129,10 +129,10 @@ pub fn parse_advisories_atom(
     items
 }
 
-/// What: Fetch recent security advisories from security.archlinux.org.
+/// What: Fetch recent security advisories from the official Atom feed URL.
 ///
 /// Inputs:
-/// - `client`: Caller-provided HTTP client (controls timeouts, user agent).
+/// - `client`: Caller-provided HTTP client controlling transport policy.
 /// - `limit`: Maximum number of advisories to return (best-effort).
 /// - `cutoff_date`: Optional `YYYY-MM-DD` date for early filtering.
 ///
@@ -140,54 +140,121 @@ pub fn parse_advisories_atom(
 /// - `Ok(Vec<SecurityAdvisory>)` with normalized dates, newest first.
 ///
 /// Details:
-/// - Fetches the official advisory Atom feed and delegates to
-///   [`parse_advisories_atom`].
-/// - No caching or rate limiting; callers decide their fetch cadence.
+/// - Delegates to [`fetch_security_advisories_from`] with
+///   [`ADVISORY_FEED_URL`].
+/// - No cache is used unless callers opt into
+///   [`fetch_security_advisories_cached`].
 ///
 /// # Errors
 ///
-/// Returns `ArchToolkitError::Parse` when the request fails or the server
-/// returns a non-success status.
-///
-/// # Example
-///
-/// ```no_run
-/// use arch_toolkit::news::fetch_security_advisories;
-///
-/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// let client = reqwest::Client::new();
-/// let advisories = fetch_security_advisories(&client, 10, None).await?;
-/// for advisory in advisories {
-///     println!("{} [{}] {}", advisory.date, advisory.severity, advisory.title);
-/// }
-/// # Ok(())
-/// # }
-/// ```
+/// Returns an error for transport, response-status, response-bound, or UTF-8
+/// failures.
 pub async fn fetch_security_advisories(
     client: &reqwest::Client,
     limit: usize,
     cutoff_date: Option<&str>,
 ) -> Result<Vec<SecurityAdvisory>> {
-    let response = client
-        .get(ADVISORY_FEED_URL)
-        .send()
+    fetch_security_advisories_from(client, ADVISORY_FEED_URL, limit, cutoff_date).await
+}
+
+/// What: Fetch and parse advisories from a caller-specified Atom URL.
+///
+/// Inputs:
+/// - `client`: Caller-provided HTTP client controlling transport policy.
+/// - `feed_url`: Absolute HTTP(S) Atom URL, useful for proxies and fixtures.
+/// - `limit`: Maximum number of advisories to return (best-effort).
+/// - `cutoff_date`: Optional `YYYY-MM-DD` date for early filtering.
+///
+/// Output:
+/// - Parsed advisory values from the successful bounded feed response.
+///
+/// Details:
+/// - Uses the same bounded response policy as RSS news while preserving the
+///   existing parse and identifier semantics.
+///
+/// # Errors
+///
+/// Returns an error for invalid URLs, failed requests, non-success statuses,
+/// oversized bodies, or invalid UTF-8.
+pub async fn fetch_security_advisories_from(
+    client: &reqwest::Client,
+    feed_url: &str,
+    limit: usize,
+    cutoff_date: Option<&str>,
+) -> Result<Vec<SecurityAdvisory>> {
+    let body = super::article::fetch_bounded_text(
+        client,
+        feed_url,
+        super::arch::MAX_FEED_RESPONSE_BYTES,
+        "advisory feed",
+    )
+    .await?;
+    tracing::debug!(bytes = body.len(), "fetched security advisories");
+    Ok(parse_advisories_atom(&body, limit, cutoff_date))
+}
+
+/// What: Fetch official security advisories with an optional generic feed cache.
+///
+/// Inputs:
+/// - `client`: Caller-provided HTTP client controlling transport policy.
+/// - `limit`: Maximum number of advisories to return (best-effort).
+/// - `cutoff_date`: Optional `YYYY-MM-DD` date for early filtering.
+/// - `cache`: Optional generic feed cache; `None` always fetches fresh content.
+///
+/// Output:
+/// - Parsed advisories from a cache hit or successful bounded HTTP response.
+///
+/// Details:
+/// - Delegates to [`fetch_security_advisories_cached_from`] using the official
+///   advisory feed URL and never uses AUR cache internals.
+///
+/// # Errors
+///
+/// Returns requested cache, transport, status, bound, or UTF-8 errors.
+pub async fn fetch_security_advisories_cached(
+    client: &reqwest::Client,
+    limit: usize,
+    cutoff_date: Option<&str>,
+    cache: Option<&dyn super::FeedCache>,
+) -> Result<Vec<SecurityAdvisory>> {
+    fetch_security_advisories_cached_from(client, ADVISORY_FEED_URL, limit, cutoff_date, cache)
         .await
-        .map_err(|e| ArchToolkitError::Parse(format!("advisory feed request failed: {e}")))?;
-    let status = response.status();
-    let body = response
-        .text()
-        .await
-        .map_err(|e| ArchToolkitError::Parse(format!("advisory feed body read failed: {e}")))?;
-    tracing::debug!(
-        status = status.as_u16(),
-        bytes = body.len(),
-        "fetched advisories feed"
-    );
-    if !status.is_success() {
-        return Err(ArchToolkitError::Parse(format!(
-            "advisory feed returned status {status}"
-        )));
-    }
+}
+
+/// What: Fetch caller-specified advisories with an optional generic feed cache.
+///
+/// Inputs:
+/// - `client`: Caller-provided HTTP client controlling transport policy.
+/// - `feed_url`: Absolute HTTP(S) Atom URL, useful for proxies and fixtures.
+/// - `limit`: Maximum number of advisories to return (best-effort).
+/// - `cutoff_date`: Optional `YYYY-MM-DD` date for early filtering.
+/// - `cache`: Optional generic feed cache; `None` always fetches fresh content.
+///
+/// Output:
+/// - Parsed advisories from a cache hit or newly stored successful response.
+///
+/// Details:
+/// - Uses the `security-advisory` namespace, so a shared cache cannot confuse
+///   Atom advisory payloads with Arch news RSS payloads at the same URL.
+///
+/// # Errors
+///
+/// Returns requested cache, transport, status, bound, or UTF-8 errors.
+pub async fn fetch_security_advisories_cached_from(
+    client: &reqwest::Client,
+    feed_url: &str,
+    limit: usize,
+    cutoff_date: Option<&str>,
+    cache: Option<&dyn super::FeedCache>,
+) -> Result<Vec<SecurityAdvisory>> {
+    let body = super::arch::fetch_cached_feed_text(
+        client,
+        feed_url,
+        "security-advisory",
+        "advisory feed",
+        cache,
+    )
+    .await?;
     Ok(parse_advisories_atom(&body, limit, cutoff_date))
 }
 
@@ -255,6 +322,7 @@ fn parse_content_fields(content: &str) -> (AdvisorySeverity, Vec<String>) {
         let Some((key, value)) = line.split_once(':') else {
             continue;
         };
+        let value = value.trim().trim_end_matches("</pre>").trim();
         match key.trim().to_ascii_lowercase().as_str() {
             "severity" => severity = AdvisorySeverity::parse(value),
             "package" | "packages" => {

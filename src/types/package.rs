@@ -81,6 +81,121 @@ pub struct AurPackageDetails {
     pub orphaned: bool,
 }
 
+/// What: Bound one official-package metadata response and candidate scan.
+///
+/// Inputs:
+/// - Constructed by callers before fetching a package detail response.
+///
+/// Output:
+/// - Maximum bytes read and result candidates considered for one request.
+///
+/// Details:
+/// - The response bound is enforced before JSON parsing.
+/// - The candidate bound prevents a broad endpoint response from expanding a
+///   single-package detail lookup into unbounded parsing work.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MetadataFetchLimits {
+    /// Maximum response-body bytes accepted before JSON parsing.
+    pub max_response_bytes: usize,
+    /// Maximum API result rows considered while selecting an exact package.
+    pub max_candidates: usize,
+}
+
+impl Default for MetadataFetchLimits {
+    /// What: Provide conservative bounds for an official package detail request.
+    ///
+    /// Inputs: None.
+    ///
+    /// Output:
+    /// - A 512 KiB response bound and 16 candidate rows.
+    ///
+    /// Details:
+    /// - Callers can choose tighter or explicitly reviewed larger limits.
+    fn default() -> Self {
+        Self {
+            max_response_bytes: 512 * 1024,
+            max_candidates: 16,
+        }
+    }
+}
+
+/// What: Bound sequential mirror health probes made by one caller.
+///
+/// Inputs:
+/// - Constructed by callers before checking mirror probe URLs.
+///
+/// Output:
+/// - Maximum mirror rows probed in input order.
+///
+/// Details:
+/// - Transport timeout, proxy, TLS, redirect, and retry policy remain owned by
+///   the caller-provided reqwest client.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MirrorHealthLimits {
+    /// Maximum input mirror rows probed sequentially.
+    pub max_mirrors: usize,
+}
+
+impl Default for MirrorHealthLimits {
+    /// What: Provide a conservative default mirror-health probe bound.
+    ///
+    /// Inputs: None.
+    ///
+    /// Output:
+    /// - A maximum of 16 sequential probes.
+    ///
+    /// Details:
+    /// - Sequential checks avoid an implicit concurrent request burst.
+    fn default() -> Self {
+        Self { max_mirrors: 16 }
+    }
+}
+
+/// What: Represent the reachability classification of one mirror probe.
+///
+/// Inputs:
+/// - Produced from a single caller-selected HTTP(S) probe response or error.
+///
+/// Output:
+/// - A stable status without a latency ranking or aggregate score.
+///
+/// Details:
+/// - A success status means the final response status was 2xx under the
+///   caller's reqwest redirect policy; it is not a broad performance claim.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MirrorHealthStatus {
+    /// The probe completed with a successful 2xx HTTP status.
+    Reachable,
+    /// The probe returned a non-success status or transport error.
+    Unreachable,
+    /// The source mirror URL or caller probe path was invalid for this request.
+    Invalid,
+}
+
+/// What: Record bounded evidence from one mirror health probe.
+///
+/// Inputs:
+/// - Produced for each selected `MirrorInfo` row in input order.
+///
+/// Output:
+/// - Mirror URL, stable classification, optional final status code, and an
+///   actionable error detail when no successful response was received.
+///
+/// Details:
+/// - This is deliberately not a performance ranking and never changes mirror
+///   configuration or executes a system command.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MirrorHealth {
+    /// Source mirror URL that was selected for the probe.
+    pub mirror_url: String,
+    /// Stable reachability classification for this one probe.
+    pub status: MirrorHealthStatus,
+    /// Final HTTP status code when a response was received.
+    pub status_code: Option<u16>,
+    /// Bounded transport or validation detail when the probe was not reachable.
+    pub detail: Option<String>,
+}
+
 /// AUR comment from a package page.
 ///
 /// Contains author, date, and content of a comment, with optional timestamp

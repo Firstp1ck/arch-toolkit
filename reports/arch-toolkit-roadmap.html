@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>arch-toolkit Roadmap Completion Report</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f4f7fb; --panel:#fff; --ink:#152033; --muted:#5d6b80; --line:#d9e1ec; --accent:#2457d6; --good:#087a4b; --warn:#a15c00; --soft:#eef3ff; --code:#101827; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#0d1420; --panel:#151f2d; --ink:#eef4ff; --muted:#aab8cc; --line:#314057; --accent:#8badff; --good:#63d7a4; --warn:#ffc46b; --soft:#1b2b49; --code:#090e16; } }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+    a { color:var(--accent); }
+    header { background:linear-gradient(135deg,#102a56,#2457d6); color:white; padding:3.2rem max(1.25rem,calc((100% - 1120px)/2)); }
+    header h1 { margin:0 0 .45rem; font-size:clamp(2rem,5vw,3.4rem); line-height:1.08; letter-spacing:-.035em; }
+    header p { max-width:760px; margin:.45rem 0 0; color:#dce7ff; font-size:1.08rem; }
+    main { max-width:1120px; margin:auto; padding:1.5rem 1.25rem 4rem; }
+    .status { display:inline-flex; gap:.5rem; align-items:center; margin-bottom:1rem; padding:.35rem .7rem; border-radius:999px; background:#d9f7e9; color:#075b39; font-weight:750; }
+    .status::before { content:"✓"; }
+    .metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.8rem; margin-top:-2.3rem; position:relative; }
+    .metric,.card,section { background:var(--panel); border:1px solid var(--line); border-radius:14px; box-shadow:0 5px 18px rgba(20,35,60,.07); }
+    .metric { padding:1rem 1.1rem; }
+    .metric b { display:block; color:var(--accent); font-size:1.55rem; line-height:1.2; }
+    .metric span { color:var(--muted); font-size:.86rem; }
+    nav { display:flex; flex-wrap:wrap; gap:.45rem; margin:1.25rem 0; position:sticky; top:.5rem; z-index:2; padding:.6rem; background:color-mix(in srgb,var(--bg) 85%,transparent); backdrop-filter:blur(10px); border-radius:12px; }
+    nav a { text-decoration:none; padding:.42rem .72rem; border:1px solid var(--line); border-radius:999px; background:var(--panel); font-weight:650; }
+    section { margin:1rem 0; padding:1.25rem; scroll-margin-top:5rem; }
+    h2 { margin:.1rem 0 1rem; font-size:1.45rem; letter-spacing:-.015em; }
+    h3 { margin:1rem 0 .45rem; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.85rem; }
+    .card { padding:1rem; box-shadow:none; }
+    .card h3 { margin:0 0 .3rem; }
+    .card p { margin:.25rem 0; color:var(--muted); }
+    .phase { border-left:4px solid var(--good); }
+    table { width:100%; border-collapse:collapse; display:block; overflow-x:auto; }
+    th,td { text-align:left; vertical-align:top; padding:.65rem .7rem; border-bottom:1px solid var(--line); }
+    th { color:var(--muted); font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; }
+    code { font:13px ui-monospace,SFMono-Regular,Consolas,monospace; background:var(--soft); border-radius:5px; padding:.12rem .3rem; }
+    pre { margin:.7rem 0; padding:1rem; overflow:auto; background:var(--code); color:#e7eefc; border-radius:10px; font:12.5px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    .ok { color:var(--good); font-weight:750; }
+    .pending { color:var(--warn); font-weight:750; }
+    .callout { border-left:4px solid var(--accent); padding:.8rem 1rem; background:var(--soft); border-radius:0 9px 9px 0; }
+    .risk { border-left:4px solid var(--warn); }
+    ul { padding-left:1.25rem; }
+    li+li { margin-top:.25rem; }
+    svg { width:100%; height:auto; }
+    footer { color:var(--muted); text-align:center; padding:1.4rem; }
+    @media (max-width:760px) { .metrics,.grid { grid-template-columns:1fr; } .metrics { margin-top:1rem; } header { padding-bottom:2rem; } nav { position:static; } }
+    @media print { nav { display:none; } body { background:white; } section,.metric { box-shadow:none; break-inside:avoid; } }
+  </style>
+</head>
+<body>
+<header>
+  <div class="status">Authorized repository scope complete</div>
+  <h1>arch-toolkit roadmap<br>completion report</h1>
+  <p>Release-readiness evidence for Phases 1–5, including dependency graph correctness, deterministic quality gates, optional bounded capabilities, independent review, and the explicit no-publication boundary.</p>
+</header>
+<main>
+  <div class="metrics" aria-label="Completion metrics">
+    <div class="metric"><b>0.3.0</b><span>selected package version</span></div>
+    <div class="metric"><b>5 / 5</b><span>authorized phases complete</span></div>
+    <div class="metric"><b>797</b><span>production functions complexity-scanned</span></div>
+    <div class="metric"><b>0</b><span>remaining review blockers</span></div>
+  </div>
+
+  <nav aria-label="Report sections">
+    <a href="#outcome">Outcome</a><a href="#architecture">Architecture</a><a href="#phases">Phases</a><a href="#verification">Verification</a><a href="#review">Review</a><a href="#release">Release boundary</a><a href="#risks">Residual risks</a>
+  </nav>
+
+  <section id="outcome">
+    <h2>Outcome</h2>
+    <div class="callout"><strong>Release-ready, not released.</strong> Every authorized in-repository roadmap item is implemented and verified. Phase 6 is an External Pacsea workstream and remains intentionally incomplete. No commit, tag, push, GitHub release, or crates.io publication was performed.</div>
+    <div class="grid" style="margin-top:1rem">
+      <div class="card"><h3>Scope delivered</h3><p>Release-line recovery, additive AUR-aware graph resolution, deterministic CI/quality contracts, Pacsea-facing behavior freezes, and bounded optional news/index/metadata/sandbox capabilities.</p></div>
+      <div class="card"><h3>Compatibility posture</h3><p>The synchronous resolver and existing parser/install entry points remain available. The new graph API is additive; <code>deps</code> remains independent of <code>aur</code>.</p></div>
+      <div class="card"><h3>Safety posture</h3><p>PKGBUILD analysis is static text analysis only. Library workflows construct/fetch but do not execute system-modifying commands. Network responses and graph work have explicit bounds.</p></div>
+      <div class="card"><h3>Change footprint</h3><p>49 tracked or new paths in the local implementation tree. The tracked diff at report generation contained about 3,900 insertions and 1,843 deletions.</p></div>
+    </div>
+  </section>
+
+  <section id="architecture">
+    <h2>Delivered architecture</h2>
+    <svg viewBox="0 0 980 310" role="img" aria-labelledby="diagram-title diagram-desc">
+      <title id="diagram-title">arch-toolkit delivered component flow</title>
+      <desc id="diagram-desc">Callers use stable entry points and optional modules. Bounded dependency and fetch boundaries produce structured models and diagnostics without hidden system mutation.</desc>
+      <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#6f88ad"/></marker></defs>
+      <g fill="none" stroke="#6f88ad" stroke-width="2" marker-end="url(#arrow)"><path d="M210 70 H365"/><path d="M210 155 H365"/><path d="M210 240 H365"/><path d="M615 70 H770"/><path d="M615 155 H770"/><path d="M615 240 H770"/></g>
+      <g font-family="system-ui" font-size="15" text-anchor="middle">
+        <rect x="25" y="30" width="185" height="80" rx="12" fill="#2457d6"/><text x="118" y="64" fill="white" font-weight="700">Stable public APIs</text><text x="118" y="87" fill="#dce7ff">resolver · parsers · plans</text>
+        <rect x="25" y="115" width="185" height="80" rx="12" fill="#2457d6"/><text x="118" y="149" fill="white" font-weight="700">Optional modules</text><text x="118" y="172" fill="#dce7ff">news · index · sandbox</text>
+        <rect x="25" y="200" width="185" height="80" rx="12" fill="#2457d6"/><text x="118" y="234" fill="white" font-weight="700">Caller-owned policy</text><text x="118" y="257" fill="#dce7ff">HTTP · timeout · dry-run</text>
+        <rect x="365" y="30" width="250" height="80" rx="12" fill="#087a4b"/><text x="490" y="63" fill="white" font-weight="700">Bounded graph engine</text><text x="490" y="86" fill="#dbf8eb">depth · nodes · cache · cycles</text>
+        <rect x="365" y="115" width="250" height="80" rx="12" fill="#087a4b"/><text x="490" y="148" fill="white" font-weight="700">Bounded fetch boundaries</text><text x="490" y="171" fill="#dbf8eb">feeds · AUR · mirrors</text>
+        <rect x="365" y="200" width="250" height="80" rx="12" fill="#087a4b"/><text x="490" y="233" fill="white" font-weight="700">Static security analysis</text><text x="490" y="256" fill="#dbf8eb">stable rules · no execution</text>
+        <rect x="770" y="30" width="185" height="80" rx="12" fill="#8b4b00"/><text x="863" y="64" fill="white" font-weight="700">Deterministic graph</text><text x="863" y="87" fill="#fff0d5">models + diagnostics</text>
+        <rect x="770" y="115" width="185" height="80" rx="12" fill="#8b4b00"/><text x="863" y="149" fill="white" font-weight="700">Typed capabilities</text><text x="863" y="172" fill="#fff0d5">cache + health + refresh</text>
+        <rect x="770" y="200" width="185" height="80" rx="12" fill="#8b4b00"/><text x="863" y="234" fill="white" font-weight="700">Actionable findings</text><text x="863" y="257" fill="#fff0d5">bounded evidence</text>
+      </g>
+    </svg>
+  </section>
+
+  <section id="phases">
+    <h2>Phase completion</h2>
+    <div class="grid">
+      <div class="card phase"><h3>1 · Release line</h3><p>Selected <code>0.3.0</code>; reconciled changelog and release tooling; preview is local-only; package/publish dry-run passed.</p></div>
+      <div class="card phase"><h3>2 · Dependency resolution</h3><p>Added injected metadata, bounded deterministic graph traversal, split-package/provider/conflict/constraint diagnostics, caching, cycles, and stable rendering.</p></div>
+      <div class="card phase"><h3>3 · Reliability</h3><p>Replaced false-green complexity analysis, isolated PATH/environment tests, added missing-tool and compatibility contracts, and expanded CI feature tests.</p></div>
+      <div class="card phase"><h3>4 · Compatibility decisions</h3><p>Preserved C-locale internal parsing and existing APIs; rejected speculative localized-label surface; froze demonstrated Pacsea-facing behavior.</p></div>
+      <div class="card phase"><h3>5 · Optional capabilities</h3><p>Added article extraction/cache, mirror discovery/refresh, official metadata/health, explicit AUR limits, and structured static PKGBUILD findings.</p></div>
+      <div class="card risk"><h3>6 · Pacsea migration</h3><p><span class="pending">External and intentionally open.</span> It requires a separate repository, immutable toolkit release/pin, and its own parity evidence.</p></div>
+    </div>
+  </section>
+
+  <section id="verification">
+    <h2>Verification evidence</h2>
+    <table>
+      <thead><tr><th>Gate</th><th>Evidence</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>Formatting and whitespace</td><td><code>cargo fmt --all -- --check</code>; <code>git diff --check</code></td><td class="ok">Passed</td></tr>
+        <tr><td>Lint</td><td>Default and <code>--all-targets --all-features -- -D warnings</code></td><td class="ok">Passed</td></tr>
+        <tr><td>Compilation</td><td>Default plus no-default representative standalone/combined feature configurations</td><td class="ok">Passed</td></tr>
+        <tr><td>Tests</td><td>Default serial, all-feature serial, all-feature parallel, doctests, and CI feature rows</td><td class="ok">Passed</td></tr>
+        <tr><td>Complexity</td><td>797 production functions scanned; threshold 25; analyzer self-test</td><td class="ok">0 violations</td></tr>
+        <tr><td>Documentation</td><td><code>cargo doc --all-features --no-deps</code></td><td class="ok">Passed</td></tr>
+        <tr><td>Packaging</td><td>Package listing and <code>cargo publish --dry-run --allow-dirty</code></td><td class="ok">Passed locally</td></tr>
+        <tr><td>Release script</td><td>Fish syntax and preview side-effect contract</td><td class="ok">Passed</td></tr>
+      </tbody>
+    </table>
+    <h3>Focused reviewer reproductions</h3>
+    <pre>Shared-node graph probe: 272.55 s before → 300.292 µs after
+Wider graph probe: 241 nodes / 1,864 edges / 241 provider calls → 7.569 ms
+Host vercmp differential: corrected conditional pkgrel cases match
+AUR response bound: deterministic local response at 4 MiB + 1 byte rejected
+Complexity gate: 797 functions analyzed → 0 threshold violations</pre>
+  </section>
+
+  <section id="review">
+    <h2>Independent review and disposition</h2>
+    <p>Two distinct-provider independent reviews inspected the integrated tracked and untracked diff. Accepted findings were fixed and then independently revalidated; both follow-ups returned a clean/no-blocker verdict.</p>
+    <table>
+      <thead><tr><th>Area</th><th>Disposition</th><th>Resolution</th></tr></thead>
+      <tbody>
+        <tr><td>Graph path explosion</td><td class="ok">Accepted · fixed</td><td>Memoize each package's shallowest expansion depth; retain edge/constraint processing.</td></tr>
+        <tr><td>libalpm pkgrel semantics</td><td class="ok">Accepted · fixed</td><td>Compare pkgrel only when both versions specify it; differential-tested with host <code>vercmp</code>.</td></tr>
+        <tr><td>Unbounded AUR body</td><td class="ok">Accepted · fixed</td><td>4 MiB Content-Length and streamed-chunk bound plus direct deterministic regression test.</td></tr>
+        <tr><td>Malformed constraints</td><td class="ok">Accepted · fixed</td><td>Distinct <code>MalformedConstraint</code> diagnostic before range-intersection handling.</td></tr>
+        <tr><td>CI checks only</td><td class="ok">Accepted · fixed</td><td>Feature matrix now runs tests; production complexity scope remains intentional.</td></tr>
+        <tr><td>Synchronous provider preemption</td><td class="pending">Deferred · documented</td><td>Provider receives timeout but owns cancellable I/O; preemption requires a broader runtime contract.</td></tr>
+        <tr><td>Error enum granularity</td><td class="pending">Deferred · documented</td><td>Current messages remain actionable; structured transport/cancellation kinds require later API revision.</td></tr>
+        <tr><td><code>index → reqwest</code></td><td>Rejected with rationale</td><td>Required by accepted mirror discovery, independently compilable, and unchanged for default dependency users.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="release">
+    <h2>Release boundary</h2>
+    <div class="callout"><strong>Authorization is still required.</strong> The repository is packageable as <code>0.3.0</code>, but this work did not create a commit or tag, push a branch/tag, mutate a GitHub release, or publish to crates.io. Those are external side effects and require a separate explicit request.</div>
+    <ul>
+      <li><span class="ok">Allowed and completed:</span> local formatting, linting, tests, docs, package listing, and publish dry-run.</li>
+      <li><span class="pending">Not performed:</span> commit, tag, push, GitHub release creation/update, and crates.io upload.</li>
+      <li><span class="pending">External scope:</span> Pacsea migration and parity verification.</li>
+    </ul>
+  </section>
+
+  <section id="risks">
+    <h2>Residual risks and deliberate limits</h2>
+    <div class="grid">
+      <div class="card risk"><h3>Synchronous metadata providers</h3><p>A provider that ignores its supplied timeout can still block its caller. The resolver cannot safely preempt arbitrary synchronous I/O without a new execution contract.</p></div>
+      <div class="card risk"><h3>Pkgver segmentation</h3><p>Conditional pkgrel behavior now matches libalpm. Some unusual separator-level pkgver differences pre-date this work; documentation no longer claims full algorithm parity.</p></div>
+      <div class="card risk"><h3>Error categorization</h3><p>Some task/transport failures remain mapped through <code>ArchToolkitError::Parse</code>. Messages are actionable, but programmatic categorization is deferred.</p></div>
+      <div class="card risk"><h3>Static PKGBUILD analysis</h3><p>The analyzer intentionally does not execute Bash and is not a full shell parser or reputation scanner. Findings are deterministic indicators, not proof of safety.</p></div>
+    </div>
+    <p><strong>Completion confidence: 96/100.</strong> Confidence is supported by the full local matrix, direct reviewer reproductions, two independent no-blocker follow-ups, and package dry-run. It remains below 100 because live endpoints, MSRV CI execution, external publication, and the External Pacsea migration were intentionally not exercised here.</p>
+  </section>
+</main>
+<footer>Generated 2026-07-31 from the completed arch-toolkit roadmap and accepted-fix review evidence.</footer>
+</body>
+</html>

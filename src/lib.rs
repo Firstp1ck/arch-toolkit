@@ -203,8 +203,19 @@ pub use types::{
     ReverseDependencySummary, SrcinfoData,
 };
 
+#[cfg(feature = "deps")]
+pub use types::dependency::{
+    DependencyConstraintRange, DependencyGraphConfig, DependencyGraphDiagnostic,
+    DependencyGraphDiagnosticKind, DependencyGraphEdge, DependencyGraphNode,
+    DependencyGraphNodeStatus, DependencyGraphResolution, DependencyMetadata,
+    DependencyMetadataResponse, DependencyProvenance, DependencyVersionBound,
+};
+
 #[cfg(feature = "index")]
-pub use types::index::{IndexQueryResult, InstalledPackagesMode, OfficialIndex, OfficialPackage};
+pub use types::index::{
+    IndexQueryResult, InstalledPackagesMode, MirrorDiscoveryLimits, MirrorInfo, OfficialIndex,
+    OfficialPackage,
+};
 
 #[cfg(feature = "install")]
 pub use types::install::{AurHelper, CascadeMode, CommandSpec, InstallOptions, PrivilegeTool};
@@ -212,13 +223,30 @@ pub use types::install::{AurHelper, CascadeMode, CommandSpec, InstallOptions, Pr
 #[cfg(feature = "news")]
 pub use types::news::{AdvisorySeverity, ArchNewsItem, SecurityAdvisory};
 
+#[cfg(feature = "news")]
+pub use news::{FeedCache, InMemoryFeedCache};
+
 #[cfg(feature = "sandbox")]
-pub use types::sandbox::{DependencyDelta, SandboxInfo};
+pub use types::sandbox::{
+    DependencyDelta, SandboxAnalysisLimitation, SandboxFinding, SandboxInfo, SandboxRuleId,
+    SandboxStaticAnalysis,
+};
+
+#[cfg(all(feature = "aur", feature = "index"))]
+pub use aur::{
+    ARCH_PACKAGE_SEARCH_URL, check_mirror_health, fetch_arch_package_detail,
+    fetch_official_package_detail_from,
+};
+
+#[cfg(all(feature = "aur", feature = "index"))]
+pub use types::package::{
+    MetadataFetchLimits, MirrorHealth, MirrorHealthLimits, MirrorHealthStatus,
+};
 
 #[cfg(feature = "deps")]
 pub use deps::{
-    DependencyResolution, DependencyResolver, ResolverConfig, ReverseDependencyAnalyzer,
-    ReverseDependencyReport,
+    DependencyMetadataProvider, DependencyResolution, DependencyResolver, ResolverConfig,
+    ReverseDependencyAnalyzer, ReverseDependencyReport,
 };
 
 #[cfg(feature = "aur")]

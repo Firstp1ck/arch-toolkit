@@ -67,16 +67,32 @@
 
 mod advisories;
 mod arch;
+mod article;
+mod cache;
 mod date;
 
 // Re-export types from types module
 pub use crate::types::news::{AdvisorySeverity, ArchNewsItem, SecurityAdvisory};
 
+// Re-export generic cache boundary
+pub use cache::{FeedCache, InMemoryFeedCache};
+
 // Re-export news functions
-pub use arch::{ARCH_NEWS_FEED_URL, fetch_arch_news, parse_arch_news_rss};
+pub use arch::{
+    ARCH_NEWS_FEED_URL, MAX_FEED_RESPONSE_BYTES, fetch_arch_news, fetch_arch_news_cached,
+    fetch_arch_news_cached_from, fetch_arch_news_from, parse_arch_news_rss,
+};
+
+// Re-export article extraction functions
+pub use article::{
+    MAX_ARTICLE_HTML_BYTES, MAX_ARTICLE_TEXT_BYTES, extract_article_text, fetch_article_text,
+};
 
 // Re-export advisory functions
-pub use advisories::{ADVISORY_FEED_URL, fetch_security_advisories, parse_advisories_atom};
+pub use advisories::{
+    ADVISORY_FEED_URL, fetch_security_advisories, fetch_security_advisories_cached,
+    fetch_security_advisories_cached_from, fetch_security_advisories_from, parse_advisories_atom,
+};
 
 // Re-export date utilities
 pub use date::normalize_feed_date;

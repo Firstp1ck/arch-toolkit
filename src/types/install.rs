@@ -53,14 +53,14 @@ impl std::fmt::Display for AurHelper {
 /// - Determines the prefix binary in privileged commands (e.g., `sudo pacman ...`).
 ///
 /// Details:
-/// - Preference order follows Pacsea: `sudo` first, then `doas`.
+/// - Automatic detection prefers `doas`, then falls back to `sudo`, matching Pacsea.
 /// - Password handling (stdin piping, credential caching) is intentionally NOT
 ///   part of arch-toolkit; it is a UI/session concern.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PrivilegeTool {
-    /// The `sudo` privilege tool (preferred).
+    /// The `sudo` privilege tool (automatic fallback).
     Sudo,
-    /// The `doas` privilege tool (fallback).
+    /// The `doas` privilege tool (preferred for automatic detection).
     Doas,
 }
 

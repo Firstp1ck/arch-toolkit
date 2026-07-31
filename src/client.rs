@@ -1258,8 +1258,10 @@ impl Default for ArchClientBuilder {
 
 #[cfg(test)]
 #[cfg(feature = "aur")]
+#[allow(clippy::significant_drop_tightening)]
 mod tests {
     use super::*;
+    use crate::env::test_support::lock_env;
 
     #[test]
     fn test_arch_client_new() {
@@ -1445,9 +1447,8 @@ mod tests {
 
     #[test]
     fn test_arch_client_builder_from_env_timeout() {
-        unsafe {
-            std::env::set_var("ARCH_TOOLKIT_TIMEOUT", "60");
-        }
+        let env = lock_env();
+        env.set("ARCH_TOOLKIT_TIMEOUT", "60");
         let client = ArchClientBuilder::from_env().build();
         assert!(
             client.is_ok(),
@@ -1455,16 +1456,12 @@ mod tests {
         );
         let client = client.expect("client creation should succeed");
         assert_eq!(client.timeout, Duration::from_mins(1));
-        unsafe {
-            std::env::remove_var("ARCH_TOOLKIT_TIMEOUT");
-        }
     }
 
     #[test]
     fn test_arch_client_builder_from_env_user_agent() {
-        unsafe {
-            std::env::set_var("ARCH_TOOLKIT_USER_AGENT", "test-env-agent/1.0");
-        }
+        let env = lock_env();
+        env.set("ARCH_TOOLKIT_USER_AGENT", "test-env-agent/1.0");
         let client = ArchClientBuilder::from_env().build();
         assert!(
             client.is_ok(),
@@ -1472,16 +1469,12 @@ mod tests {
         );
         let client = client.expect("client creation should succeed");
         assert_eq!(client.user_agent, "test-env-agent/1.0");
-        unsafe {
-            std::env::remove_var("ARCH_TOOLKIT_USER_AGENT");
-        }
     }
 
     #[test]
     fn test_arch_client_builder_from_env_health_check_timeout() {
-        unsafe {
-            std::env::set_var("ARCH_TOOLKIT_HEALTH_CHECK_TIMEOUT", "10");
-        }
+        let env = lock_env();
+        env.set("ARCH_TOOLKIT_HEALTH_CHECK_TIMEOUT", "10");
         let client = ArchClientBuilder::from_env().build();
         assert!(
             client.is_ok(),
@@ -1489,16 +1482,12 @@ mod tests {
         );
         let client = client.expect("client creation should succeed");
         assert_eq!(client.health_check_timeout, Duration::from_secs(10));
-        unsafe {
-            std::env::remove_var("ARCH_TOOLKIT_HEALTH_CHECK_TIMEOUT");
-        }
     }
 
     #[test]
     fn test_arch_client_builder_from_env_max_retries() {
-        unsafe {
-            std::env::set_var("ARCH_TOOLKIT_MAX_RETRIES", "5");
-        }
+        let env = lock_env();
+        env.set("ARCH_TOOLKIT_MAX_RETRIES", "5");
         let client = ArchClientBuilder::from_env().build();
         assert!(
             client.is_ok(),
@@ -1506,16 +1495,12 @@ mod tests {
         );
         let client = client.expect("client creation should succeed");
         assert_eq!(client.retry_policy().max_retries, 5);
-        unsafe {
-            std::env::remove_var("ARCH_TOOLKIT_MAX_RETRIES");
-        }
     }
 
     #[test]
     fn test_arch_client_builder_from_env_retry_enabled() {
-        unsafe {
-            std::env::set_var("ARCH_TOOLKIT_RETRY_ENABLED", "false");
-        }
+        let env = lock_env();
+        env.set("ARCH_TOOLKIT_RETRY_ENABLED", "false");
         let client = ArchClientBuilder::from_env().build();
         assert!(
             client.is_ok(),
@@ -1523,17 +1508,13 @@ mod tests {
         );
         let client = client.expect("client creation should succeed");
         assert!(!client.retry_policy().enabled);
-        unsafe {
-            std::env::remove_var("ARCH_TOOLKIT_RETRY_ENABLED");
-        }
     }
 
     #[test]
     fn test_arch_client_builder_from_env_retry_delays() {
-        unsafe {
-            std::env::set_var("ARCH_TOOLKIT_RETRY_INITIAL_DELAY_MS", "2000");
-            std::env::set_var("ARCH_TOOLKIT_RETRY_MAX_DELAY_MS", "60000");
-        }
+        let env = lock_env();
+        env.set("ARCH_TOOLKIT_RETRY_INITIAL_DELAY_MS", "2000");
+        env.set("ARCH_TOOLKIT_RETRY_MAX_DELAY_MS", "60000");
         let client = ArchClientBuilder::from_env().build();
         assert!(
             client.is_ok(),
@@ -1542,17 +1523,12 @@ mod tests {
         let client = client.expect("client creation should succeed");
         assert_eq!(client.retry_policy().initial_delay_ms, 2000);
         assert_eq!(client.retry_policy().max_delay_ms, 60000);
-        unsafe {
-            std::env::remove_var("ARCH_TOOLKIT_RETRY_INITIAL_DELAY_MS");
-            std::env::remove_var("ARCH_TOOLKIT_RETRY_MAX_DELAY_MS");
-        }
     }
 
     #[test]
     fn test_arch_client_builder_from_env_validation_strict() {
-        unsafe {
-            std::env::set_var("ARCH_TOOLKIT_VALIDATION_STRICT", "false");
-        }
+        let env = lock_env();
+        env.set("ARCH_TOOLKIT_VALIDATION_STRICT", "false");
         let client = ArchClientBuilder::from_env().build();
         assert!(
             client.is_ok(),
@@ -1560,16 +1536,12 @@ mod tests {
         );
         let client = client.expect("client creation should succeed");
         assert!(!client.validation_config().strict_empty);
-        unsafe {
-            std::env::remove_var("ARCH_TOOLKIT_VALIDATION_STRICT");
-        }
     }
 
     #[test]
     fn test_arch_client_builder_from_env_cache_size() {
-        unsafe {
-            std::env::set_var("ARCH_TOOLKIT_CACHE_SIZE", "200");
-        }
+        let env = lock_env();
+        env.set("ARCH_TOOLKIT_CACHE_SIZE", "200");
         let cache_config = crate::cache::CacheConfigBuilder::new()
             .enable_search(true)
             .build();
@@ -1580,36 +1552,12 @@ mod tests {
             client.is_ok(),
             "ArchClientBuilder::from_env() with cache size should succeed"
         );
-        // Cache size is only applied if cache_config exists, so we verify it was set
-        unsafe {
-            std::env::remove_var("ARCH_TOOLKIT_CACHE_SIZE");
-        }
     }
 
     #[test]
     fn test_arch_client_builder_from_env_missing_vars() {
-        // Remove all environment variables to test defaults
-        unsafe {
-            std::env::remove_var("ARCH_TOOLKIT_TIMEOUT");
-        }
-        unsafe {
-            std::env::remove_var("ARCH_TOOLKIT_USER_AGENT");
-        }
-        unsafe {
-            std::env::remove_var("ARCH_TOOLKIT_HEALTH_CHECK_TIMEOUT");
-        }
-        unsafe {
-            std::env::remove_var("ARCH_TOOLKIT_MAX_RETRIES");
-        }
-        unsafe {
-            std::env::remove_var("ARCH_TOOLKIT_RETRY_ENABLED");
-            std::env::remove_var("ARCH_TOOLKIT_RETRY_INITIAL_DELAY_MS");
-            std::env::remove_var("ARCH_TOOLKIT_RETRY_MAX_DELAY_MS");
-            std::env::remove_var("ARCH_TOOLKIT_VALIDATION_STRICT");
-        }
-        unsafe {
-            std::env::remove_var("ARCH_TOOLKIT_CACHE_SIZE");
-        }
+        // The guard clears every managed variable, so this exercises the defaults.
+        let _env = lock_env();
 
         let client = ArchClientBuilder::from_env().build();
         assert!(
@@ -1628,6 +1576,8 @@ mod tests {
 
     #[test]
     fn test_arch_client_builder_with_env_overrides() {
+        let env = lock_env();
+
         // Set code defaults
         let client = ArchClient::builder()
             .timeout(Duration::from_secs(30))
@@ -1636,10 +1586,8 @@ mod tests {
         assert!(client.is_ok());
 
         // Now test with_env() overriding code values
-        unsafe {
-            std::env::set_var("ARCH_TOOLKIT_TIMEOUT", "60");
-            std::env::set_var("ARCH_TOOLKIT_USER_AGENT", "env-agent/1.0");
-        }
+        env.set("ARCH_TOOLKIT_TIMEOUT", "60");
+        env.set("ARCH_TOOLKIT_USER_AGENT", "env-agent/1.0");
         let client = ArchClient::builder()
             .timeout(Duration::from_secs(30))
             .user_agent("code-agent/1.0")
@@ -1652,21 +1600,15 @@ mod tests {
         let client = client.expect("client creation should succeed");
         assert_eq!(client.timeout, Duration::from_mins(1));
         assert_eq!(client.user_agent, "env-agent/1.0");
-        unsafe {
-            std::env::remove_var("ARCH_TOOLKIT_TIMEOUT");
-        }
-        unsafe {
-            std::env::remove_var("ARCH_TOOLKIT_USER_AGENT");
-        }
     }
 
     #[test]
     fn test_arch_client_builder_with_env_partial_override() {
-        // Set code defaults
-        unsafe {
-            std::env::set_var("ARCH_TOOLKIT_TIMEOUT", "90");
-        }
-        // Don't set ARCH_TOOLKIT_USER_AGENT
+        let env = lock_env();
+
+        // Only the timeout is present in the environment; the guard guarantees
+        // ARCH_TOOLKIT_USER_AGENT is unset for the duration of this test.
+        env.set("ARCH_TOOLKIT_TIMEOUT", "90");
 
         let client = ArchClient::builder()
             .timeout(Duration::from_secs(30))
@@ -1680,19 +1622,16 @@ mod tests {
         let client = client.expect("client creation should succeed");
         assert_eq!(client.timeout, Duration::from_secs(90)); // Overridden
         assert_eq!(client.user_agent, "code-agent/1.0"); // Not overridden
-        unsafe {
-            std::env::remove_var("ARCH_TOOLKIT_TIMEOUT");
-        }
     }
 
     #[test]
     fn test_arch_client_builder_from_env_invalid_values() {
+        let env = lock_env();
+
         // Set invalid environment variables - they should be ignored
-        unsafe {
-            std::env::set_var("ARCH_TOOLKIT_TIMEOUT", "invalid");
-            std::env::set_var("ARCH_TOOLKIT_MAX_RETRIES", "not-a-number");
-            std::env::set_var("ARCH_TOOLKIT_RETRY_ENABLED", "maybe");
-        }
+        env.set("ARCH_TOOLKIT_TIMEOUT", "invalid");
+        env.set("ARCH_TOOLKIT_MAX_RETRIES", "not-a-number");
+        env.set("ARCH_TOOLKIT_RETRY_ENABLED", "maybe");
 
         let client = ArchClientBuilder::from_env().build();
         assert!(
@@ -1704,15 +1643,5 @@ mod tests {
         assert_eq!(client.timeout, Duration::from_secs(DEFAULT_TIMEOUT_SECS));
         assert_eq!(client.retry_policy().max_retries, 3); // Default
         assert!(client.retry_policy().enabled); // Default
-
-        unsafe {
-            std::env::remove_var("ARCH_TOOLKIT_TIMEOUT");
-        }
-        unsafe {
-            std::env::remove_var("ARCH_TOOLKIT_MAX_RETRIES");
-        }
-        unsafe {
-            std::env::remove_var("ARCH_TOOLKIT_RETRY_ENABLED");
-        }
     }
 }

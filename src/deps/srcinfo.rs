@@ -8,10 +8,66 @@ use std::collections::HashSet;
 use crate::deps::parse::parse_dep_spec;
 #[cfg(feature = "aur")]
 use crate::error::Result;
-use crate::types::SrcinfoData;
+use crate::types::dependency::SrcinfoData;
 
 #[cfg(feature = "aur")]
 use crate::aur::utils::percent_encode;
+
+/// What: Store one split-package output for graph-only `.SRCINFO` resolution.
+///
+/// Inputs:
+/// - Package-output dependency, provider, conflict, and replacement fields.
+///
+/// Output:
+/// - Retains a selected split package's metadata for the injected graph resolver.
+///
+/// Details:
+/// - This internal projection keeps the legacy public `SrcinfoData` struct source-compatible while
+///   preserving exact package-output ownership for graph traversal.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(super) struct SrcinfoPackage {
+    /// Selected package output name.
+    pub(super) name: String,
+    /// Runtime dependency specifications.
+    pub(super) depends: Vec<String>,
+    /// Build dependency specifications.
+    pub(super) makedepends: Vec<String>,
+    /// Check dependency specifications.
+    pub(super) checkdepends: Vec<String>,
+    /// Optional dependency specifications.
+    pub(super) optdepends: Vec<String>,
+    /// Package and virtual conflict specifications.
+    pub(super) conflicts: Vec<String>,
+    /// Virtual provider specifications.
+    pub(super) provides: Vec<String>,
+    /// Replacement specifications.
+    pub(super) replaces: Vec<String>,
+}
+
+/// What: Store graph-specific header and split-package `.SRCINFO` metadata.
+///
+/// Inputs:
+/// - Package-base header fields and selected package-output projections.
+///
+/// Output:
+/// - Supplies epoch/pkgver/pkgrel and split package metadata to graph resolution.
+///
+/// Details:
+/// - This internal representation is separate from the legacy public aggregate parser output to
+///   avoid breaking callers that construct `SrcinfoData` with a struct literal.
+#[derive(Clone, Debug, Default)]
+pub(super) struct GraphSrcinfoData {
+    /// Package-base name.
+    pub(super) pkgbase: String,
+    /// Package epoch, if declared.
+    pub(super) epoch: String,
+    /// Package version.
+    pub(super) pkgver: String,
+    /// Package release.
+    pub(super) pkgrel: String,
+    /// Individual split-package outputs.
+    pub(super) packages: Vec<SrcinfoPackage>,
+}
 
 /// What: Parse dependencies from .SRCINFO content.
 ///
@@ -143,20 +199,186 @@ pub fn parse_srcinfo_conflicts(srcinfo: &str) -> Vec<String> {
     conflicts
 }
 
+/// What: Normalize a `.SRCINFO` key by removing an architecture suffix.
+///
+/// Inputs:
+/// - `key`: A raw `.SRCINFO` key such as `depends_x86_64`.
+///
+/// Output:
+/// - Returns the key family such as `depends`.
+///
+/// Details:
+/// - `.SRCINFO` uses underscore suffixes for architecture-specific dependency fields.
+fn srcinfo_base_key(key: &str) -> &str {
+    key.find('_').map_or(key, |position| &key[..position])
+}
+
+/// What: Add a metadata value once while retaining first-seen source order.
+///
+/// Inputs:
+/// - `values`: Destination metadata values.
+/// - `value`: Metadata value to insert.
+///
+/// Output:
+/// - Updates `values` only when the value was not present.
+///
+/// Details:
+/// - Retaining source order keeps split-package fixture results deterministic before graph sorting.
+fn push_srcinfo_value(values: &mut Vec<String>, value: &str) {
+    if !values.iter().any(|existing| existing == value) {
+        values.push(value.to_string());
+    }
+}
+
+/// What: Add one dependency-related `.SRCINFO` field to a package projection.
+///
+/// Inputs:
+/// - `package`: Package-base or package-output projection to update.
+/// - `key`: Normalized `.SRCINFO` field family.
+/// - `value`: Trimmed field value.
+///
+/// Output:
+/// - Updates the matching dependency, provider, conflict, or replacement collection.
+///
+/// Details:
+/// - Values are intentionally not filtered: graph resolution must retain virtual `.so` provides
+///   and dependencies even though legacy flat parser helpers retain their existing filtering.
+fn apply_package_field(package: &mut SrcinfoPackage, key: &str, value: &str) {
+    match key {
+        "depends" => push_srcinfo_value(&mut package.depends, value),
+        "makedepends" => push_srcinfo_value(&mut package.makedepends, value),
+        "checkdepends" => push_srcinfo_value(&mut package.checkdepends, value),
+        "optdepends" => push_srcinfo_value(&mut package.optdepends, value),
+        "conflicts" => push_srcinfo_value(&mut package.conflicts, value),
+        "provides" => push_srcinfo_value(&mut package.provides, value),
+        "replaces" => push_srcinfo_value(&mut package.replaces, value),
+        _ => {}
+    }
+}
+
+/// What: Merge shared package-base fields into one split-package output.
+///
+/// Inputs:
+/// - `package`: Split-package output to enrich.
+/// - `base`: Shared package-base dependency metadata.
+///
+/// Output:
+/// - Updates `package` with every unique base-level field.
+///
+/// Details:
+/// - Package-output fields retain their values and base fields are appended only when absent.
+fn merge_package_base(package: &mut SrcinfoPackage, base: &SrcinfoPackage) {
+    for (target, shared) in [
+        (&mut package.depends, &base.depends),
+        (&mut package.makedepends, &base.makedepends),
+        (&mut package.checkdepends, &base.checkdepends),
+        (&mut package.optdepends, &base.optdepends),
+        (&mut package.conflicts, &base.conflicts),
+        (&mut package.provides, &base.provides),
+        (&mut package.replaces, &base.replaces),
+    ] {
+        for value in shared {
+            push_srcinfo_value(target, value);
+        }
+    }
+}
+
+/// What: Parse lossless package-output dependency metadata from a `.SRCINFO` document.
+///
+/// Inputs:
+/// - `content`: Raw `.SRCINFO` text.
+///
+/// Output:
+/// - Returns one package projection for every `pkgname` section.
+///
+/// Details:
+/// - Package-base metadata is merged into each output. Unlike legacy helpers, virtual entries are
+///   retained so a graph provider can verify provider identity and conflicts.
+fn parse_srcinfo_packages(content: &str) -> Vec<SrcinfoPackage> {
+    let mut base = SrcinfoPackage::default();
+    let mut packages = Vec::new();
+    let mut current_package = None;
+
+    for raw_line in content.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some((raw_key, raw_value)) = line.split_once('=') else {
+            continue;
+        };
+        let key = srcinfo_base_key(raw_key.trim());
+        let value = raw_value.trim();
+        if key == "pkgname" {
+            packages.push(SrcinfoPackage {
+                name: value.to_string(),
+                ..SrcinfoPackage::default()
+            });
+            current_package = Some(packages.len() - 1);
+            continue;
+        }
+        if let Some(index) = current_package {
+            apply_package_field(&mut packages[index], key, value);
+        } else {
+            apply_package_field(&mut base, key, value);
+        }
+    }
+
+    for package in &mut packages {
+        merge_package_base(package, &base);
+    }
+    packages
+}
+
+/// What: Parse graph-specific package-base and split-package `.SRCINFO` metadata.
+///
+/// Inputs:
+/// - `content`: Raw `.SRCINFO` text.
+///
+/// Output:
+/// - Returns package base, epoch/pkgver/pkgrel, and lossless split-package projections.
+///
+/// Details:
+/// - The graph resolver uses this internal parser while legacy callers retain the existing
+///   aggregate `parse_srcinfo` contract and its public `SrcinfoData` shape.
+pub(super) fn parse_srcinfo_graph(content: &str) -> GraphSrcinfoData {
+    let mut data = GraphSrcinfoData {
+        packages: parse_srcinfo_packages(content),
+        ..GraphSrcinfoData::default()
+    };
+    for raw_line in content.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some((raw_key, raw_value)) = line.split_once('=') else {
+            continue;
+        };
+        let key = srcinfo_base_key(raw_key.trim());
+        let value = raw_value.trim();
+        match key {
+            "pkgbase" if data.pkgbase.is_empty() => data.pkgbase = value.to_string(),
+            "epoch" if data.epoch.is_empty() => data.epoch = value.to_string(),
+            "pkgver" if data.pkgver.is_empty() => data.pkgver = value.to_string(),
+            "pkgrel" if data.pkgrel.is_empty() => data.pkgrel = value.to_string(),
+            _ => {}
+        }
+    }
+    data
+}
+
 /// What: Parse full .SRCINFO content into structured data.
 ///
 /// Inputs:
 /// - `content`: Raw .SRCINFO file content.
 ///
 /// Output:
-/// - Returns `SrcinfoData` with all parsed fields populated.
+/// - Returns `SrcinfoData` with aggregate fields populated.
 ///
 /// Details:
-/// - Parses all fields from .SRCINFO format including pkgbase, pkgname, pkgver, pkgrel.
-/// - Extracts all dependency types (depends, makedepends, checkdepends, optdepends).
-/// - Extracts conflicts, provides, and replaces arrays.
-/// - For split packages (multiple pkgname), uses the first pkgname found.
-/// - Handles architecture-specific dependencies by merging into main arrays.
+/// - Parses all fields including pkgbase, pkgname, pkgver, pkgrel and package arrays.
+/// - Existing aggregate fields retain their historical first-name/merged-array behavior.
+/// - Graph-only split-package selection is kept internal to preserve public struct-literal compatibility.
 /// - Returns default `SrcinfoData` with empty fields if content is malformed.
 #[must_use]
 pub fn parse_srcinfo(content: &str) -> SrcinfoData {
@@ -457,20 +679,51 @@ replaces = replaced-pkg
         assert!(data.replaces.contains(&"replaced-pkg".to_string()));
     }
 
+    /// What: Verify split package outputs retain selected and inherited metadata.
+    ///
+    /// Inputs:
+    /// - A fixture with package-base dependencies and two split package outputs.
+    ///
+    /// Output:
+    /// - Confirms legacy first-package fields remain while `packages` preserves both outputs.
+    ///
+    /// Details:
+    /// - Shared base dependencies must be inherited without leaking one output's dependencies into
+    ///   another selected split package.
     #[test]
     fn test_parse_srcinfo_split_packages() {
         let srcinfo = r"
 pkgbase = split-package
+depends = shared-base
 pkgname = split-package-base
+depends = base-only
 pkgname = split-package-gui
+depends = gui-only
+provides = virtual-gui=1
 pkgver = 1.0.0
 pkgrel = 1
 ";
 
         let data = parse_srcinfo(srcinfo);
-        // Should use first pkgname found
         assert_eq!(data.pkgname, "split-package-base");
         assert_eq!(data.pkgbase, "split-package");
+        let graph_data = parse_srcinfo_graph(srcinfo);
+        assert_eq!(graph_data.packages.len(), 2);
+        let base = graph_data
+            .packages
+            .iter()
+            .find(|package| package.name == "split-package-base");
+        let gui = graph_data
+            .packages
+            .iter()
+            .find(|package| package.name == "split-package-gui");
+        assert!(base.is_some_and(|package| {
+            package.depends == vec!["base-only".to_string(), "shared-base".to_string()]
+        }));
+        assert!(gui.is_some_and(|package| {
+            package.depends == vec!["gui-only".to_string(), "shared-base".to_string()]
+                && package.provides == vec!["virtual-gui=1".to_string()]
+        }));
     }
 
     #[test]

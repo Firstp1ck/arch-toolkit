@@ -140,6 +140,67 @@ pub enum InstalledPackagesMode {
     AllExplicit,
 }
 
+/// What: Represent one mirror-status row that can produce a pacman server line.
+///
+/// Inputs:
+/// - Parsed from a caller-selected mirror-status JSON endpoint or constructed
+///   directly by callers.
+///
+/// Output:
+/// - Portable mirror metadata for deterministic filtering and mirrorlist generation.
+///
+/// Details:
+/// - `url` is a mirror base URL; generation appends `/$repo/os/$arch`.
+/// - `active` and `protocols` are source metadata, not a live health claim by
+///   this library.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MirrorInfo {
+    /// Mirror base URL, normally ending in `/`.
+    pub url: String,
+    /// Whether the discovery source marked the mirror active.
+    pub active: bool,
+    /// Transport protocols advertised by the discovery source.
+    pub protocols: Vec<String>,
+}
+
+/// What: Hold explicit bounds for caller-client mirror-status discovery.
+///
+/// Inputs:
+/// - Constructed directly or with [`MirrorDiscoveryLimits::default`].
+///
+/// Output:
+/// - Maximum response bytes and accepted mirror rows for one discovery request.
+///
+/// Details:
+/// - Bounds apply before JSON parsing and while accepting valid rows, keeping
+///   remote endpoint responses from causing unbounded resource use.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MirrorDiscoveryLimits {
+    /// Maximum response-body bytes accepted before JSON parsing.
+    pub max_response_bytes: usize,
+    /// Maximum valid mirror rows returned to the caller.
+    pub max_mirrors: usize,
+}
+
+impl Default for MirrorDiscoveryLimits {
+    /// What: Provide conservative default bounds for one mirror-status request.
+    ///
+    /// Inputs: None.
+    ///
+    /// Output:
+    /// - A 512 KiB response bound and 128 returned mirrors.
+    ///
+    /// Details:
+    /// - Callers can choose tighter limits for constrained environments or
+    ///   larger explicit limits when their application has reviewed the cost.
+    fn default() -> Self {
+        Self {
+            max_response_bytes: 512 * 1024,
+            max_mirrors: 128,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

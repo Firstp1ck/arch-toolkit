@@ -153,12 +153,15 @@
 mod explicit;
 mod fetch;
 mod installed;
+mod mirrors;
 mod persist;
 mod query;
+mod refresh;
 
 // Re-export types from types module
 pub use crate::types::index::{
-    IndexQueryResult, InstalledPackagesMode, OfficialIndex, OfficialPackage,
+    IndexQueryResult, InstalledPackagesMode, MirrorDiscoveryLimits, MirrorInfo, OfficialIndex,
+    OfficialPackage,
 };
 
 // Re-export installed functions
@@ -171,6 +174,15 @@ pub use explicit::{is_explicit, refresh_explicit_cache, refresh_explicit_cache_a
 
 // Re-export query functions
 pub use query::{all_official, search_official};
+
+// Re-export caller-client mirror discovery and pure mirrorlist generation
+pub use mirrors::{
+    ARCH_MIRROR_STATUS_URL, MAX_MIRRORLIST_BYTES, fetch_arch_mirrors, fetch_mirrors_from,
+    generate_mirrorlist,
+};
+
+// Re-export cancellable background refresh
+pub use refresh::{IndexRefreshHandle, spawn_index_refresh};
 
 // Re-export fetch functions
 #[cfg(feature = "index")]

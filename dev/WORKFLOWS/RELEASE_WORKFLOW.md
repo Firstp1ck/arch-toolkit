@@ -1,77 +1,54 @@
 # Release Workflow
 
-Automated release process using `release.fish`.
+`dev/scripts/release.fish` separates local verification from external release actions.
 
-## Usage
+## Prepare
+
+1. Audit public API changes and select a unique semantic version.
+2. Update `Cargo.toml`, `Cargo.lock`, and `CHANGELOG.md` in a reviewed change.
+3. Keep the canonical tag format `v<version>` (for example, `v0.3.0`).
+4. Ensure required tools are available: Rust/Cargo, Bash, Fish, Git, and—only for release mode—`gh` plus signing credentials.
+
+## Preview (no external side effects)
 
 ```fish
-# Full release
-./dev/scripts/release.fish 0.1.0
-
-# Preview (dry-run)
-./dev/scripts/release.fish --dry-run 0.1.0
+./dev/scripts/release.fish --preview 0.3.0
+# --dry-run is an alias for --preview
 ```
 
-## Pre-flight Checks
+Preview does not edit files, commit, tag, push, create a GitHub release, or publish. It runs:
 
-Before starting, the script verifies:
-- ✅ On `main` branch
-- ✅ Working directory is clean (no uncommitted changes)
+- formatting, all-target/all-feature Clippy, check, default tests;
+- serial and parallel all-feature tests;
+- complexity analyzer self-tests and the threshold-25 gate;
+- minimal and representative feature-isolation checks;
+- rustdoc, package-content inspection, and `cargo publish --dry-run --allow-dirty`.
 
-## Workflow Steps
+A failed check stops the preview. Preview never reports a skipped check as successful.
 
-### Phase 1: Version Update
-1. Update `Cargo.toml` version
-2. Run `cargo check` to update `Cargo.lock`
+## Release (explicit external authorization)
 
-### Phase 2: Documentation
-3. **[Cursor]** Run `/release-new {version}` → creates `Documents/RELEASE_v{version}.md`
-4. Update `CHANGELOG.md` with release notes
-5. **[Cursor]** Run `/readme-update` (if needed)
+Real release actions require separate user authorization. After approval and from a clean `main` worktree:
 
-### Phase 3: Build and Test
-6. Run `cargo-dev` (tests/checks)
-7. Build library with all features
-8. Run `cargo publish --dry-run` to verify
+```fish
+./dev/scripts/release.fish --release 0.3.0
+```
 
-### Phase 4: Release
-9. Commit and push all changes
-10. Create git tag (tag = version, e.g., `0.1.0`)
-11. Push tag to GitHub
-12. Create GitHub release
-13. Publish to crates.io: `cargo publish`
+The script reruns the full preview, refuses existing local/remote tags, displays the exact external actions, and requires typing `release 0.3.0`. It then:
 
-## Manual Steps (Cursor AI)
+1. creates signed tag `v0.3.0`;
+2. pushes only that tag;
+3. creates a prerelease GitHub release with generated notes;
+4. runs `cargo publish`.
 
-The script pauses at these steps for you to run Cursor commands:
+It never deletes/recreates tags and never commits or pushes branch changes. If a later external step fails after the tag was pushed, stop and reconcile manually; do not rewrite published history.
 
-| Step | Command | Output |
-|------|---------|--------|
-| 3 | `/release-new {version}` | `Documents/RELEASE_v{version}.md` |
-| 5 | `/readme-update` | Updates `README.md` |
+## Live diagnostic tests
 
-## Files Updated
+Tests marked `#[ignore]` because they require AUR/network access, pacman databases, or host package state are diagnostics, not release gates. Run them manually only in a controlled Arch environment:
 
-| File | Description |
-|------|-------------|
-| `Cargo.toml` | Version number |
-| `Cargo.lock` | Dependency lock |
-| `Documents/RELEASE_v{version}.md` | Release notes |
-| `CHANGELOG.md` | Cumulative changelog |
-| `README.md` | Project readme |
+```bash
+cargo test --all-features -- --ignored --test-threads=1
+```
 
-## Prerequisites
-
-- `cursor` CLI (for documentation generation)
-- `gh` CLI (GitHub)
-- `cargo` with crates.io credentials configured
-- `git`
-- Fish functions: `cargo-dev`
-
-## Crates.io Publishing
-
-Before publishing, ensure:
-- You have a crates.io account
-- You're added as an owner/maintainer of the crate
-- Your crates.io token is configured: `cargo login <token>`
-- Run `cargo publish --dry-run` to verify everything works
+Deterministic fixtures/mocks and the normal CI matrix are the release acceptance evidence.
