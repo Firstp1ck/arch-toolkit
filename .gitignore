@@ -6,6 +6,7 @@
 .jj
 RELEASE_v*.md
 docs/
+plans/archive/
 
 .vscode/
 .cache/
