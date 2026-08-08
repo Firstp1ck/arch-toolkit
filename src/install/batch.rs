@@ -39,7 +39,7 @@ impl InstallPlan {
     /// - `&self`: The planned commands, in execution order.
     ///
     /// Output:
-    /// - Shell string like `sudo pacman -S ... && paru -S --aur ...`;
+    /// - Shell string like `sudo pacman -S ... -- <names> && paru -S --aur ... -- <names>`;
     ///   empty string for an empty plan.
     ///
     /// Details:
@@ -68,7 +68,8 @@ impl InstallPlan {
     /// )?;
     /// assert_eq!(
     ///     plan.to_shell_string(),
-    ///     "pacman -S --needed --noconfirm ripgrep && paru -S --aur --needed --noconfirm yay-bin"
+    ///     "pacman -S --needed --noconfirm -- ripgrep \
+    ///      && paru -S --aur --needed --noconfirm -- yay-bin"
     /// );
     /// # Ok::<(), arch_toolkit::error::ArchToolkitError>(())
     /// ```
@@ -100,6 +101,8 @@ impl InstallPlan {
 /// Details:
 /// - Official packages are grouped into a single `pacman` invocation, AUR packages
 ///   into a single helper invocation (from Pacsea's `build_batch_install_command`).
+/// - Both grouped commands inherit strict name validation and the `--` operand
+///   terminator from the underlying direct builders.
 /// - Empty `targets` produces an empty plan (no error), so callers can pass
 ///   through selection results unchecked.
 /// - arch-toolkit never executes the plan; run the commands with
@@ -129,8 +132,14 @@ impl InstallPlan {
 ///     None::<&std::collections::HashSet<String>>,
 /// )?;
 /// assert_eq!(plan.commands.len(), 2);
-/// assert_eq!(plan.commands[0].to_shell_string(), "sudo pacman -S --needed --noconfirm ripgrep");
-/// assert_eq!(plan.commands[1].to_shell_string(), "paru -S --aur --needed --noconfirm yay-bin");
+/// assert_eq!(
+///     plan.commands[0].to_shell_string(),
+///     "sudo pacman -S --needed --noconfirm -- ripgrep"
+/// );
+/// assert_eq!(
+///     plan.commands[1].to_shell_string(),
+///     "paru -S --aur --needed --noconfirm -- yay-bin"
+/// );
 /// # Ok::<(), arch_toolkit::error::ArchToolkitError>(())
 /// ```
 pub fn build_batch_install<S: BuildHasher>(
@@ -225,7 +234,7 @@ mod tests {
     /// - Two official targets with sudo privilege.
     ///
     /// Output:
-    /// - One command: `sudo pacman -S --needed --noconfirm a b`.
+    /// - One command: `sudo pacman -S --needed --noconfirm -- a b`.
     ///
     /// Details:
     /// - Grouping mirrors Pacsea's single-invocation batching.
@@ -242,7 +251,11 @@ mod tests {
         assert_eq!(plan.commands.len(), 1);
         assert_eq!(
             plan.commands[0].to_shell_string(),
-            "sudo pacman -S --needed --noconfirm a b"
+            "sudo pacman -S --needed --noconfirm -- a b"
+        );
+        assert_eq!(
+            plan.commands[0].args,
+            ["pacman", "-S", "--needed", "--noconfirm", "--", "a", "b"]
         );
         assert_eq!(plan.official, ["a", "b"]);
         assert!(plan.aur.is_empty());
@@ -255,7 +268,7 @@ mod tests {
     /// - Two AUR targets with paru and sudo configured.
     ///
     /// Output:
-    /// - One command without sudo: `paru -S --aur --needed --noconfirm x y`.
+    /// - One command without sudo: `paru -S --aur --needed --noconfirm -- x y`.
     ///
     /// Details:
     /// - Helpers must never be wrapped in sudo; they escalate internally.
@@ -272,8 +285,35 @@ mod tests {
         assert_eq!(plan.commands.len(), 1);
         assert_eq!(
             plan.commands[0].to_shell_string(),
-            "paru -S --aur --needed --noconfirm x y"
+            "paru -S --aur --needed --noconfirm -- x y"
         );
+    }
+
+    #[test]
+    /// What: Verify batch planning rejects option-like package names.
+    ///
+    /// Inputs:
+    /// - Official and AUR targets named `--help`, `-S`, and `.hidden`.
+    ///
+    /// Output:
+    /// - `InvalidPackageName` from both routing branches.
+    ///
+    /// Details:
+    /// - Batch planning must inherit the leading-byte rule (U5).
+    fn batch_rejects_option_like_names() {
+        for evil in ["--help", "-S", ".hidden"] {
+            for target in [official(evil), aur_pkg(evil)] {
+                let err = build_batch_install(
+                    std::slice::from_ref(&target),
+                    Some(AurHelper::Paru),
+                    Some(PrivilegeTool::Sudo),
+                    &InstallOptions::default(),
+                    NO_INSTALLED,
+                )
+                .expect_err("batch should reject option-like names");
+                assert!(matches!(err, ArchToolkitError::InvalidPackageName { .. }));
+            }
+        }
     }
 
     #[test]
@@ -334,11 +374,11 @@ mod tests {
         .expect("plan");
         assert_eq!(
             plan.commands[0].to_shell_string(),
-            "pacman -S --noconfirm vim"
+            "pacman -S --noconfirm -- vim"
         );
         assert_eq!(
             plan.commands[1].to_shell_string(),
-            "paru -S --aur --needed --noconfirm fresh-pkg"
+            "paru -S --aur --needed --noconfirm -- fresh-pkg"
         );
     }
 

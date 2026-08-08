@@ -48,12 +48,17 @@ pub fn shell_single_quote(s: &str) -> String {
 /// - `name`: Candidate package name to validate.
 ///
 /// Output:
-/// - `true` when `name` is non-empty and every byte is one of `a-z`, `0-9`,
-///   `@`, `.`, `_`, `+`, `-`.
+/// - `true` when `name` starts with a lowercase ASCII letter or digit and every
+///   remaining byte is one of `a-z`, `0-9`, `@`, `.`, `_`, `+`, `-`.
 ///
 /// Details:
 /// - Defense-in-depth gate before command construction, matching Arch's
 ///   package naming rules (lowercase only).
+/// - The first byte may not be `-` or `.`, so a name can never be parsed as an
+///   option (`--help`, `-S`) or a hidden path, even before the `--` operand
+///   terminator that all builders emit.
+/// - Internal `@ . _ + -` remain valid, preserving `lib32-*`, split packages,
+///   versioned names such as `python3.12`, and `+` names.
 /// - Ported from Pacsea's `install/utils.rs`.
 ///
 /// # Example
@@ -63,18 +68,27 @@ pub fn shell_single_quote(s: &str) -> String {
 ///
 /// assert!(is_safe_package_name("ripgrep"));
 /// assert!(is_safe_package_name("libc++"));
+/// assert!(is_safe_package_name("lib32-glibc"));
 /// assert!(!is_safe_package_name("bad;rm -rf"));
 /// assert!(!is_safe_package_name("Upper"));
+/// assert!(!is_safe_package_name("--help"));
+/// assert!(!is_safe_package_name(".hidden"));
 /// assert!(!is_safe_package_name(""));
 /// ```
 #[must_use]
 pub fn is_safe_package_name(name: &str) -> bool {
-    !name.is_empty()
-        && name.bytes().all(|byte| {
-            byte.is_ascii_lowercase()
-                || byte.is_ascii_digit()
-                || matches!(byte, b'@' | b'.' | b'_' | b'+' | b'-')
-        })
+    let mut bytes = name.bytes();
+    let Some(first) = bytes.next() else {
+        return false;
+    };
+    if !first.is_ascii_lowercase() && !first.is_ascii_digit() {
+        return false;
+    }
+    bytes.all(|byte| {
+        byte.is_ascii_lowercase()
+            || byte.is_ascii_digit()
+            || matches!(byte, b'@' | b'.' | b'_' | b'+' | b'-')
+    })
 }
 
 /// What: Validate a list of package names against the strict install-command allowlist.
@@ -89,6 +103,8 @@ pub fn is_safe_package_name(name: &str) -> bool {
 ///
 /// Details:
 /// - Centralises validation so all install builders apply the same safety policy.
+/// - The reported pattern states the leading-byte restriction that prevents
+///   option confusion.
 /// - Ported from Pacsea's `install/utils.rs`, adapted to `ArchToolkitError`.
 ///
 /// # Errors
@@ -102,7 +118,9 @@ pub fn validate_package_names<S: AsRef<str>>(names: &[S], context: &str) -> Resu
     {
         return Err(ArchToolkitError::InvalidPackageName {
             name: invalid.as_ref().to_string(),
-            reason: format!("invalid name for {context}; allowed pattern: ^[a-z0-9@._+-]+$"),
+            reason: format!(
+                "invalid name for {context}; allowed pattern: ^[a-z0-9][a-z0-9@._+-]*$"
+            ),
         });
     }
     Ok(())
@@ -214,7 +232,8 @@ mod tests {
     /// - `true` only for names matching `^[a-z0-9@._+-]+$`.
     ///
     /// Details:
-    /// - Uppercase, whitespace, and shell metacharacters must be rejected.
+    /// - Uppercase, whitespace, shell metacharacters, and leading `-`/`.` must
+    ///   be rejected; internal punctuation must stay valid.
     fn safe_names() {
         for good in [
             "ripgrep",
@@ -222,10 +241,27 @@ mod tests {
             "lib32-glibc",
             "python3.12",
             "a@b_c",
+            "0ad",
         ] {
             assert!(is_safe_package_name(good), "{good} should be valid");
         }
-        for bad in ["", "Upper", "a b", "x;y", "$(rm)", "a`b`", "name'quote"] {
+        for bad in [
+            "",
+            "Upper",
+            "a b",
+            "x;y",
+            "$(rm)",
+            "a`b`",
+            "name'quote",
+            "-S",
+            "--help",
+            "-",
+            ".hidden",
+            ".",
+            "@scoped",
+            "_leading",
+            "+plus",
+        ] {
             assert!(!is_safe_package_name(bad), "{bad} should be invalid");
         }
     }
@@ -243,12 +279,15 @@ mod tests {
     /// - Valid lists must pass unchanged.
     fn validation() {
         assert!(validate_package_names(&["vim", "git"], "test").is_ok());
+        let leading = validate_package_names(&["vim", "--help"], "test install");
+        assert!(leading.is_err(), "leading option names must be rejected");
         let err = validate_package_names(&["vim", "bad;name"], "test install")
             .expect_err("should reject");
         match err {
             crate::error::ArchToolkitError::InvalidPackageName { name, reason } => {
                 assert_eq!(name, "bad;name");
                 assert!(reason.contains("test install"));
+                assert!(reason.contains("^[a-z0-9][a-z0-9@._+-]*$"));
             }
             other => panic!("unexpected error: {other:?}"),
         }

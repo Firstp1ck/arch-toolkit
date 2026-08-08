@@ -155,6 +155,9 @@ pub mod health;
 #[cfg(feature = "aur")]
 mod env;
 
+#[cfg(feature = "aur")]
+mod http;
+
 #[cfg(feature = "deps")]
 pub mod deps;
 

@@ -15,6 +15,17 @@ use super::shell::validate_package_names;
 /// byte-identical output.
 pub const NO_AUR_HELPER_MESSAGE: &str = "No AUR helper (paru/yay) found.";
 
+/// Exit status used by shell-fallback bodies when no AUR helper is installed.
+///
+/// `127` is the POSIX convention for "command not found", so callers can
+/// distinguish a missing helper from a failed package operation.
+const NO_AUR_HELPER_STATUS: u8 = 127;
+
+/// POSIX option terminator placed between flags and package operands.
+///
+/// Prevents pacman, paru, and yay from parsing any operand as an option.
+const OPERAND_TERMINATOR: &str = "--";
+
 /// What: Build a pacman install command for official repository packages.
 ///
 /// Inputs:
@@ -22,12 +33,15 @@ pub const NO_AUR_HELPER_MESSAGE: &str = "No AUR helper (paru/yay) found.";
 /// - `options`: Flag options (`needed`, `noconfirm`; `aur_only` is ignored).
 ///
 /// Output:
-/// - `Ok(CommandSpec)` like `pacman -S --needed --noconfirm <names...>`.
+/// - `Ok(CommandSpec)` like `pacman -S --needed --noconfirm -- <names...>`.
 ///
 /// Details:
 /// - Does NOT prefix a privilege tool; use [`with_privilege`] for that.
 /// - Omit `--needed` (set `options.needed = false`) for explicit reinstalls,
 ///   mirroring Pacsea's reinstall path.
+/// - A `--` operand terminator separates flags from package names so pacman can
+///   never reinterpret an operand as an option (defense in depth on top of
+///   name validation).
 ///
 /// # Errors
 ///
@@ -41,7 +55,7 @@ pub const NO_AUR_HELPER_MESSAGE: &str = "No AUR helper (paru/yay) found.";
 /// use arch_toolkit::types::install::InstallOptions;
 ///
 /// let spec = build_pacman_install(&["ripgrep", "fd"], &InstallOptions::default())?;
-/// assert_eq!(spec.to_shell_string(), "pacman -S --needed --noconfirm ripgrep fd");
+/// assert_eq!(spec.to_shell_string(), "pacman -S --needed --noconfirm -- ripgrep fd");
 /// # Ok::<(), arch_toolkit::error::ArchToolkitError>(())
 /// ```
 pub fn build_pacman_install<S: AsRef<str>>(
@@ -57,7 +71,7 @@ pub fn build_pacman_install<S: AsRef<str>>(
     if options.noconfirm {
         args.push("--noconfirm".to_string());
     }
-    args.extend(names.iter().map(|n| n.as_ref().to_string()));
+    push_operands(&mut args, names);
     Ok(CommandSpec {
         program: "pacman".to_string(),
         args,
@@ -72,12 +86,14 @@ pub fn build_pacman_install<S: AsRef<str>>(
 /// - `options`: Flag options (`needed`, `noconfirm`, `aur_only`).
 ///
 /// Output:
-/// - `Ok(CommandSpec)` like `paru -S --aur --needed --noconfirm <names...>`.
+/// - `Ok(CommandSpec)` like `paru -S --aur --needed --noconfirm -- <names...>`.
 ///
 /// Details:
 /// - `--aur` (when `options.aur_only`) ensures helpers do not prefer a sync
 ///   database (e.g., Chaotic-AUR) when the same name exists on the AUR —
 ///   matching Pacsea's `aur_install_helper_flags`.
+/// - A `--` operand terminator separates flags from package names; paru and yay
+///   forward it to pacman-style operand parsing.
 /// - AUR helpers must NOT run under sudo; they invoke sudo themselves for the
 ///   pacman step. Do not wrap the result in [`with_privilege`].
 ///
@@ -93,7 +109,7 @@ pub fn build_pacman_install<S: AsRef<str>>(
 /// use arch_toolkit::types::install::{AurHelper, InstallOptions};
 ///
 /// let spec = build_aur_install(AurHelper::Paru, &["yay-bin"], &InstallOptions::default())?;
-/// assert_eq!(spec.to_shell_string(), "paru -S --aur --needed --noconfirm yay-bin");
+/// assert_eq!(spec.to_shell_string(), "paru -S --aur --needed --noconfirm -- yay-bin");
 /// # Ok::<(), arch_toolkit::error::ArchToolkitError>(())
 /// ```
 pub fn build_aur_install<S: AsRef<str>>(
@@ -113,7 +129,7 @@ pub fn build_aur_install<S: AsRef<str>>(
     if options.noconfirm {
         args.push("--noconfirm".to_string());
     }
-    args.extend(names.iter().map(|n| n.as_ref().to_string()));
+    push_operands(&mut args, names);
     Ok(CommandSpec {
         program: helper.binary_name().to_string(),
         args,
@@ -128,11 +144,12 @@ pub fn build_aur_install<S: AsRef<str>>(
 /// - `noconfirm`: Pass `--noconfirm` for non-interactive removal.
 ///
 /// Output:
-/// - `Ok(CommandSpec)` like `pacman -Rns --noconfirm <names...>`.
+/// - `Ok(CommandSpec)` like `pacman -Rns --noconfirm -- <names...>`.
 ///
 /// Details:
 /// - Does NOT prefix a privilege tool; use [`with_privilege`] for that.
 /// - Cascade semantics ported from Pacsea's `CascadeMode`.
+/// - A `--` operand terminator separates flags from package names.
 ///
 /// # Errors
 ///
@@ -146,7 +163,7 @@ pub fn build_aur_install<S: AsRef<str>>(
 /// use arch_toolkit::types::install::CascadeMode;
 ///
 /// let spec = build_remove_command(&["ripgrep"], CascadeMode::CascadeWithConfigs, true)?;
-/// assert_eq!(spec.to_shell_string(), "pacman -Rns --noconfirm ripgrep");
+/// assert_eq!(spec.to_shell_string(), "pacman -Rns --noconfirm -- ripgrep");
 /// # Ok::<(), arch_toolkit::error::ArchToolkitError>(())
 /// ```
 pub fn build_remove_command<S: AsRef<str>>(
@@ -160,11 +177,29 @@ pub fn build_remove_command<S: AsRef<str>>(
     if noconfirm {
         args.push("--noconfirm".to_string());
     }
-    args.extend(names.iter().map(|n| n.as_ref().to_string()));
+    push_operands(&mut args, names);
     Ok(CommandSpec {
         program: "pacman".to_string(),
         args,
     })
+}
+
+/// What: Append the `--` operand terminator followed by validated package names.
+///
+/// Inputs:
+/// - `args`: Argument vector already containing every flag for the command.
+/// - `names`: Validated package names to place after the terminator.
+///
+/// Output:
+/// - Side effect: `args` gains `--` and then one entry per package name.
+///
+/// Details:
+/// - Called only by builders that take package operands; operand-free commands
+///   such as `-Syu`, `-Syyu`, and `-Sua` must never gain a terminator.
+/// - Callers must validate names first; this helper performs no validation.
+fn push_operands<S: AsRef<str>>(args: &mut Vec<String>, names: &[S]) {
+    args.push(OPERAND_TERMINATOR.to_string());
+    args.extend(names.iter().map(|n| n.as_ref().to_string()));
 }
 
 /// What: Build a full-system update command.
@@ -287,7 +322,11 @@ pub fn build_aur_update_command(helper: AurHelper, noconfirm: bool) -> CommandSp
 ///   Pacsea's `aur_install_body`. Prefer this when the command runs in an
 ///   external terminal whose environment may differ from the caller's.
 /// - Names pass the same strict validation as all builders, so interpolating
-///   them into the shell string is safe without quoting.
+///   them into the shell string is safe without quoting. A `--` operand
+///   terminator is emitted before the names for defense in depth.
+/// - When neither helper exists the body writes [`NO_AUR_HELPER_MESSAGE`] to
+///   stderr and exits the subshell with status 127, so callers see a failure
+///   instead of a successful no-op.
 ///
 /// # Errors
 ///
@@ -303,6 +342,8 @@ pub fn build_aur_update_command(helper: AurHelper, noconfirm: bool) -> CommandSp
 /// let body = aur_install_shell_fallback(&["yay-bin"], &InstallOptions::default())?;
 /// assert!(body.contains("if command -v paru >/dev/null 2>&1; then paru"));
 /// assert!(body.contains("elif command -v yay >/dev/null 2>&1; then yay"));
+/// assert!(body.contains("--noconfirm -- yay-bin"));
+/// assert!(body.contains("exit 127"));
 /// # Ok::<(), arch_toolkit::error::ArchToolkitError>(())
 /// ```
 pub fn aur_install_shell_fallback<S: AsRef<str>>(
@@ -326,7 +367,9 @@ pub fn aur_install_shell_fallback<S: AsRef<str>>(
         .map(std::convert::AsRef::as_ref)
         .collect::<Vec<_>>()
         .join(" ");
-    Ok(helper_fallback_body(&format!("{flags} {joined}")))
+    Ok(helper_fallback_body(&format!(
+        "{flags} {OPERAND_TERMINATOR} {joined}"
+    )))
 }
 
 /// What: Build a shell body that updates AUR packages with runtime helper fallback.
@@ -341,6 +384,8 @@ pub fn aur_install_shell_fallback<S: AsRef<str>>(
 /// Details:
 /// - Shell-time counterpart of [`build_aur_update_command`], for callers that
 ///   spawn the update in an external terminal (Pacsea's system-update flow).
+/// - Takes no package operands, so no `--` terminator is emitted.
+/// - The no-helper branch writes to stderr and exits the subshell with 127.
 ///
 /// # Example
 ///
@@ -366,12 +411,18 @@ pub fn aur_update_shell_fallback(noconfirm: bool) -> String {
 /// - `tail`: Flags and package names appended to the chosen helper.
 ///
 /// Output:
-/// - Parenthesized `if/elif/else` snippet matching Pacsea's `aur_install_body`.
+/// - Parenthesized `if/elif/else` snippet matching Pacsea's `aur_install_body`,
+///   with a failing no-helper branch.
+///
+/// Details:
+/// - The `else` branch writes [`NO_AUR_HELPER_MESSAGE`] to stderr and runs
+///   `exit 127`. Because the body is wrapped in `( ... )`, only the fallback
+///   subshell terminates; the caller observes a non-zero status.
 fn helper_fallback_body(tail: &str) -> String {
     format!(
         "(if command -v paru >/dev/null 2>&1; then paru {tail}; \
          elif command -v yay >/dev/null 2>&1; then yay {tail}; \
-         else echo '{NO_AUR_HELPER_MESSAGE}'; fi)"
+         else echo '{NO_AUR_HELPER_MESSAGE}' >&2; exit {NO_AUR_HELPER_STATUS}; fi)"
     )
 }
 
@@ -451,7 +502,7 @@ mod tests {
             build_pacman_install(&["ripgrep"], &InstallOptions::default()).expect("build fresh");
         assert_eq!(
             fresh.to_shell_string(),
-            "pacman -S --needed --noconfirm ripgrep"
+            "pacman -S --needed --noconfirm -- ripgrep"
         );
 
         let reinstall_opts = InstallOptions {
@@ -460,14 +511,18 @@ mod tests {
         };
         let reinstall =
             build_pacman_install(&["ripgrep"], &reinstall_opts).expect("build reinstall");
-        assert_eq!(reinstall.to_shell_string(), "pacman -S --noconfirm ripgrep");
+        assert_eq!(
+            reinstall.to_shell_string(),
+            "pacman -S --noconfirm -- ripgrep"
+        );
 
         let interactive = InstallOptions {
             noconfirm: false,
             ..Default::default()
         };
         let spec = build_pacman_install(&["a", "b"], &interactive).expect("build interactive");
-        assert_eq!(spec.to_shell_string(), "pacman -S --needed a b");
+        assert_eq!(spec.to_shell_string(), "pacman -S --needed -- a b");
+        assert_eq!(spec.args, ["-S", "--needed", "--", "a", "b"]);
     }
 
     #[test]
@@ -486,7 +541,7 @@ mod tests {
             .expect("build");
         assert_eq!(
             spec.to_shell_string(),
-            "paru -S --aur --needed --noconfirm yay-bin"
+            "paru -S --aur --needed --noconfirm -- yay-bin"
         );
 
         let reinstall = InstallOptions {
@@ -494,14 +549,17 @@ mod tests {
             ..Default::default()
         };
         let spec2 = build_aur_install(AurHelper::Yay, &["yay-bin"], &reinstall).expect("build");
-        assert_eq!(spec2.to_shell_string(), "yay -S --aur --noconfirm yay-bin");
+        assert_eq!(
+            spec2.to_shell_string(),
+            "yay -S --aur --noconfirm -- yay-bin"
+        );
 
         let no_aur_flag = InstallOptions {
             aur_only: false,
             ..Default::default()
         };
         let spec3 = build_aur_install(AurHelper::Paru, &["x"], &no_aur_flag).expect("build");
-        assert_eq!(spec3.to_shell_string(), "paru -S --needed --noconfirm x");
+        assert_eq!(spec3.to_shell_string(), "paru -S --needed --noconfirm -- x");
     }
 
     #[test]
@@ -517,15 +575,16 @@ mod tests {
     /// - Matches Pacsea's `CascadeMode::flag()` semantics.
     fn remove_cascade_modes() {
         let basic = build_remove_command(&["pkg"], CascadeMode::Basic, false).expect("build basic");
-        assert_eq!(basic.to_shell_string(), "pacman -R pkg");
+        assert_eq!(basic.to_shell_string(), "pacman -R -- pkg");
 
         let cascade =
             build_remove_command(&["pkg"], CascadeMode::Cascade, true).expect("build cascade");
-        assert_eq!(cascade.to_shell_string(), "pacman -Rs --noconfirm pkg");
+        assert_eq!(cascade.to_shell_string(), "pacman -Rs --noconfirm -- pkg");
 
         let full = build_remove_command(&["a", "b"], CascadeMode::CascadeWithConfigs, true)
             .expect("build full");
-        assert_eq!(full.to_shell_string(), "pacman -Rns --noconfirm a b");
+        assert_eq!(full.to_shell_string(), "pacman -Rns --noconfirm -- a b");
+        assert_eq!(full.args, ["-Rns", "--noconfirm", "--", "a", "b"]);
     }
 
     #[test]
@@ -539,11 +598,11 @@ mod tests {
     ///
     /// Details:
     /// - Helper variant updates both official and AUR packages.
+    /// - Operand-free update commands must not gain a `--` terminator.
     fn update_commands() {
-        assert_eq!(
-            build_update_command(None, true).to_shell_string(),
-            "pacman -Syu --noconfirm"
-        );
+        let pacman = build_update_command(None, true);
+        assert!(!pacman.args.iter().any(|arg| arg == "--"));
+        assert_eq!(pacman.to_shell_string(), "pacman -Syu --noconfirm");
         assert_eq!(
             build_update_command(Some(AurHelper::Paru), false).to_shell_string(),
             "paru -Syu"
@@ -587,7 +646,8 @@ mod tests {
     /// - Install and update fallback bodies with default options.
     ///
     /// Output:
-    /// - Parenthesized paru → yay `if/elif/else` with the exact error message.
+    /// - Parenthesized paru → yay `if/elif/else` with the exact error message,
+    ///   an operand terminator, and a failing no-helper branch.
     ///
     /// Details:
     /// - Helper selection happens at shell execution time, not plan time.
@@ -596,14 +656,18 @@ mod tests {
             .expect("build body");
         assert_eq!(
             body,
-            "(if command -v paru >/dev/null 2>&1; then paru -S --aur --needed --noconfirm yay-bin; \
-             elif command -v yay >/dev/null 2>&1; then yay -S --aur --needed --noconfirm yay-bin; \
-             else echo 'No AUR helper (paru/yay) found.'; fi)"
+            "(if command -v paru >/dev/null 2>&1; \
+             then paru -S --aur --needed --noconfirm -- yay-bin; \
+             elif command -v yay >/dev/null 2>&1; \
+             then yay -S --aur --needed --noconfirm -- yay-bin; \
+             else echo 'No AUR helper (paru/yay) found.' >&2; exit 127; fi)"
         );
 
         let update = aur_update_shell_fallback(false);
         assert!(update.contains("paru -Sua;"));
+        assert!(!update.contains("-Sua --"));
         assert!(update.contains(NO_AUR_HELPER_MESSAGE));
+        assert!(update.contains("' >&2; exit 127; fi)"));
 
         let inj = aur_install_shell_fallback(&["bad;rm -rf /"], &InstallOptions::default());
         assert!(matches!(
@@ -634,12 +698,16 @@ mod tests {
         let sudo = with_privilege(PrivilegeTool::Sudo, spec.clone());
         assert_eq!(
             sudo.to_shell_string(),
-            "sudo pacman -S --needed --noconfirm vim"
+            "sudo pacman -S --needed --noconfirm -- vim"
+        );
+        assert_eq!(
+            sudo.args,
+            ["pacman", "-S", "--needed", "--noconfirm", "--", "vim"]
         );
         let doas = with_privilege(PrivilegeTool::Doas, spec);
         assert_eq!(
             doas.to_shell_string(),
-            "doas pacman -S --needed --noconfirm vim"
+            "doas pacman -S --needed --noconfirm -- vim"
         );
     }
 
@@ -654,7 +722,27 @@ mod tests {
     ///
     /// Details:
     /// - Defense-in-depth: names are validated before any command is produced.
+    /// - Leading `-`/`.` names are rejected on every builder (U5).
     fn validation_errors() {
+        for evil in ["--help", "-S", ".hidden"] {
+            assert!(
+                build_pacman_install(&[evil], &InstallOptions::default()).is_err(),
+                "pacman install should reject {evil}"
+            );
+            assert!(
+                build_aur_install(AurHelper::Paru, &[evil], &InstallOptions::default()).is_err(),
+                "AUR install should reject {evil}"
+            );
+            assert!(
+                build_remove_command(&[evil], CascadeMode::Basic, true).is_err(),
+                "remove should reject {evil}"
+            );
+            assert!(
+                aur_install_shell_fallback(&[evil], &InstallOptions::default()).is_err(),
+                "shell fallback should reject {evil}"
+            );
+        }
+
         let inj = build_pacman_install(&["good", "bad;rm -rf /"], &InstallOptions::default());
         assert!(matches!(
             inj,

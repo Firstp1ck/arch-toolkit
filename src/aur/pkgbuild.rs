@@ -19,6 +19,8 @@ use tracing::debug;
 static PKGBUILD_RATE_LIMITER: Mutex<Option<Instant>> = Mutex::new(None);
 /// Minimum interval between PKGBUILD requests in milliseconds.
 const PKGBUILD_MIN_INTERVAL_MS: u64 = 200;
+/// Maximum accepted PKGBUILD response body size in bytes.
+const MAX_AUR_PKGBUILD_RESPONSE_BYTES: usize = 10 * 1024 * 1024;
 
 /// What: Fetch PKGBUILD content for an AUR package.
 ///
@@ -141,6 +143,7 @@ pub async fn pkgbuild(client: &ArchClient, package: &str) -> Result<String> {
 /// Inputs:
 /// - `client`: HTTP client to use for requests.
 /// - `url`: URL to request.
+/// - `package`: Package name retained in every operation error.
 ///
 /// Output:
 /// - `Result<String>` containing PKGBUILD text, or an error.
@@ -177,20 +180,22 @@ async fn perform_pkgbuild_request(client: &Client, url: &str, package: &str) -> 
         }
     };
 
-    let text = match response.text().await {
-        Ok(text) => text,
-        Err(e) => {
-            debug!(error = %e, package = %package, "failed to read PKGBUILD response");
-            return Err(ArchToolkitError::pkgbuild_failed(package, e));
-        }
-    };
-
-    Ok(text)
+    let resource_label = format!("AUR PKGBUILD for package '{package}'");
+    crate::http::read_bounded_response_text(
+        response,
+        MAX_AUR_PKGBUILD_RESPONSE_BYTES,
+        &resource_label,
+        |error| ArchToolkitError::pkgbuild_failed(package, error),
+    )
+    .await
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::error::ArchToolkitError;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
     fn test_pkgbuild_error_includes_package_context() {
@@ -207,5 +212,113 @@ mod tests {
             error_msg.contains("PKGBUILD fetch failed"),
             "Error message should indicate pkgbuild operation: {error_msg}"
         );
+    }
+
+    #[tokio::test]
+    /// What: Verify an oversized PKGBUILD response is rejected while reading.
+    ///
+    /// Inputs:
+    /// - A local response one byte above the approved 10 MiB ceiling.
+    ///
+    /// Output:
+    /// - `InputTooLong` retaining PKGBUILD-operation and package context.
+    ///
+    /// Details:
+    /// - The response is inert bytes and is never sourced or executed.
+    async fn oversized_aur_pkgbuild_response_is_rejected() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/PKGBUILD"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(vec![
+                b'x';
+                MAX_AUR_PKGBUILD_RESPONSE_BYTES
+                    + 1
+            ]))
+            .mount(&server)
+            .await;
+
+        let error =
+            perform_pkgbuild_request(&Client::new(), &format!("{}/PKGBUILD", server.uri()), "yay")
+                .await
+                .expect_err("oversized PKGBUILD response must fail");
+        let message = error.to_string();
+
+        assert!(matches!(
+            error,
+            ArchToolkitError::InputTooLong {
+                max_length: MAX_AUR_PKGBUILD_RESPONSE_BYTES,
+                ..
+            }
+        ));
+        assert!(message.contains("PKGBUILD"));
+        assert!(message.contains("yay"));
+    }
+
+    #[tokio::test]
+    /// What: Preserve PKGBUILD operation context for status and UTF-8 failures.
+    ///
+    /// Inputs:
+    /// - Local HTTP 404 and invalid UTF-8 responses for package `yay`.
+    ///
+    /// Output:
+    /// - Contextual errors identifying PKGBUILD and the package.
+    ///
+    /// Details:
+    /// - Neither response body is logged, interpreted, sourced, or executed.
+    async fn aur_pkgbuild_status_and_utf8_errors_are_contextual() {
+        for (path_value, template) in [
+            ("/status", ResponseTemplate::new(404)),
+            (
+                "/utf8",
+                ResponseTemplate::new(200).set_body_bytes([0xf0, 0x28, 0x8c]),
+            ),
+        ] {
+            let server = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path(path_value))
+                .respond_with(template)
+                .mount(&server)
+                .await;
+
+            let error = perform_pkgbuild_request(
+                &Client::new(),
+                &format!("{}{path_value}", server.uri()),
+                "yay",
+            )
+            .await
+            .expect_err("invalid PKGBUILD response must fail");
+            let message = error.to_string();
+
+            assert!(message.contains("PKGBUILD"));
+            assert!(message.contains("yay"));
+        }
+    }
+
+    #[tokio::test]
+    /// What: Return a normal bounded PKGBUILD fixture unchanged.
+    ///
+    /// Inputs:
+    /// - An inert local PKGBUILD string.
+    ///
+    /// Output:
+    /// - Exact UTF-8 content returned to the caller.
+    ///
+    /// Details:
+    /// - Fetching remains data-only and does not evaluate shell text.
+    async fn normal_aur_pkgbuild_fixture_is_read() {
+        let server = MockServer::start().await;
+        let pkgbuild = "pkgname=yay\npkgver=1\n";
+        Mock::given(method("GET"))
+            .and(path("/PKGBUILD"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(pkgbuild))
+            .mount(&server)
+            .await;
+
+        let body =
+            perform_pkgbuild_request(&Client::new(), &format!("{}/PKGBUILD", server.uri()), "yay")
+                .await
+                .expect("normal PKGBUILD fixture");
+
+        assert_eq!(body, pkgbuild);
     }
 }

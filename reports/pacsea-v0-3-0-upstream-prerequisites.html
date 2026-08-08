@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>arch-toolkit 0.3.0 — Pacsea prerequisite implementation report</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1220;--panel:#121c2d;--panel2:#18253a;--text:#e8eef8;--muted:#a9b7cb;--line:#2b3b55;--green:#50d890;--yellow:#f7c65c;--red:#ff7373;--blue:#65b5ff;--code:#07101c;--radius:16px;--shadow:0 14px 36px rgb(0 0 0/.22)}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(circle at 15% 0%,#142848 0,transparent 35rem),var(--bg);color:var(--text);font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}a{color:var(--blue)}a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid var(--blue);outline-offset:3px}.skip{position:fixed;top:8px;left:8px;transform:translateY(-160%);background:var(--blue);color:#06111f;padding:8px 12px;border-radius:8px;font-weight:800;z-index:20}.skip:focus{transform:none}main{width:min(1120px,calc(100% - 32px));margin:36px auto 64px}header,.panel{background:color-mix(in srgb,var(--panel) 94%,transparent);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}header{padding:30px;margin-bottom:18px}.panel{padding:24px;margin:18px 0}h1,h2,h3{line-height:1.25;margin-top:0}h1{font-size:clamp(1.9rem,5vw,3rem);letter-spacing:-.025em;margin-bottom:8px}h2{font-size:1.45rem;border-bottom:1px solid var(--line);padding-bottom:10px}h3{font-size:1.08rem;margin-bottom:6px}.lead{font-size:1.1rem;max-width:85ch}.muted{color:var(--muted)}.badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:.78rem;font-weight:750;letter-spacing:.035em;text-transform:uppercase;margin-bottom:8px}.good{color:var(--green)}.warn{color:var(--yellow)}.info{color:var(--blue)}.badge.good{background:rgb(80 216 144/.14);border:1px solid rgb(80 216 144/.38)}.badge.warn{background:rgb(247 198 92/.14);border:1px solid rgb(247 198 92/.38)}.badge.info{background:rgb(101 181 255/.14);border:1px solid rgb(101 181 255/.38)}.callout{border-left:5px solid var(--green);background:rgb(80 216 144/.08);border-radius:8px;padding:14px 16px;margin:14px 0}.callout.warn{border-left-color:var(--yellow);background:rgb(247 198 92/.08);color:var(--text)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}.card,.metric{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:16px}.metric strong{display:block;font-size:1.45rem}.table-wrap{overflow-x:auto;border-radius:10px}table{width:100%;border-collapse:collapse;min-width:680px}th,td{text-align:left;vertical-align:top;padding:11px 9px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-size:.84rem;text-transform:uppercase;letter-spacing:.04em}code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}code{background:var(--code);padding:.12em .38em;border-radius:5px}pre{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:14px;overflow-x:auto;white-space:pre-wrap}.tabs{display:flex;gap:8px;overflow-x:auto;padding:8px;margin:0 0 18px;border:1px solid var(--line);border-radius:12px;background:rgb(7 16 28/.72)}[role=tab]{appearance:none;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--muted);padding:9px 13px;white-space:nowrap;font:inherit;font-weight:750;cursor:pointer}[role=tab][aria-selected=true]{color:var(--text);border-color:rgb(101 181 255/.45);background:rgb(101 181 255/.14)}.tabs-ready [role=tabpanel][hidden]{display:none}.tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.button{border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--text);padding:8px 12px;min-height:42px;font:inherit;font-weight:700;cursor:pointer}.button:hover{border-color:var(--blue)}figure{margin:18px 0}svg{display:block;width:100%;height:auto;background:var(--code);border:1px solid var(--line);border-radius:12px}.node{fill:#182b43;stroke:#65b5ff;stroke-width:2}.node.done{stroke:#50d890}.node-text{fill:#e8eef8;font:650 14px system-ui,sans-serif;text-anchor:middle}.edge{fill:none;stroke:#a9b7cb;stroke-width:2.5;marker-end:url(#arrow)}figcaption{color:var(--muted);margin-top:8px;font-size:.92rem}details{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}summary{cursor:pointer;color:var(--blue);font-weight:700}ul.checks{list-style:none;padding:0}.checks li{padding:7px 0}.checks li::before{content:"✓";color:var(--green);font-weight:900;margin-right:9px}footer{color:var(--muted);margin-top:24px;font-size:.9rem}@media(max-width:620px){main{width:min(100% - 18px,1120px);margin-top:10px}header,.panel{padding:18px}.tabs{position:sticky;top:0;z-index:5}}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}@media print{:root{color-scheme:light}body{background:#fff;color:#111}main{width:100%;margin:0}header,.panel,.card,.metric{box-shadow:none;background:#fff;color:#111;border-color:#bbb;break-inside:avoid}.tabs,.tools,.skip{display:none!important}[role=tabpanel],[role=tabpanel][hidden]{display:block!important}pre,code,svg{color:#111;background:#f1f3f5;border-color:#bbb}.muted,figcaption,footer{color:#444}a{color:#111;text-decoration:underline}figure{break-inside:avoid}}
+</style>
+</head>
+<body>
+<a class="skip" href="#content">Skip to report content</a>
+<main id="content">
+<header>
+<span class="badge good">Implementation verified</span>
+<h1>arch-toolkit 0.3.0 Pacsea prerequisites</h1>
+<p class="lead">Evidence-based implementation report for the bounded network, install-safety, compatibility, and crates.io packaging work defined by the canonical Pacsea prerequisite plan.</p>
+<div class="callout"><strong>Conclusion:</strong> U1–U8 are implemented and pass the complete local quality matrix. The crate payload is lean and mechanically publishable. Publication, tagging, pushing, and GitHub release creation were not performed; the final immutable commit and clean-tree dry run are recorded in the archived plan and branch PR after this report enters the release commit.</div>
+<p class="muted"><strong>Confidence:</strong> 97/100. Deterministic tests, full feature checks, dependency audit, MSRV, package inspection, two independent providers, and direct source review support the conclusion. Remaining uncertainty is limited to real paru/yay behavior and intentionally ignored live-service diagnostics.</p>
+<div class="tools"><button class="button" type="button" id="print">Print report</button><button class="button" type="button" id="copy">Copy current link</button><span id="status" class="muted" role="status" aria-live="polite"></span></div>
+</header>
+<nav class="tabs" role="tablist" aria-label="Report sections">
+<button id="tab-overview" role="tab" aria-selected="true" aria-controls="overview">Overview</button>
+<button id="tab-implementation" role="tab" aria-selected="false" aria-controls="implementation" tabindex="-1">Implementation</button>
+<button id="tab-validation" role="tab" aria-selected="false" aria-controls="validation" tabindex="-1">Validation</button>
+<button id="tab-review" role="tab" aria-selected="false" aria-controls="review" tabindex="-1">Independent review</button>
+<button id="tab-rollout" role="tab" aria-selected="false" aria-controls="rollout" tabindex="-1">Pacsea &amp; release handoff</button>
+</nav>
+<section class="panel" id="overview" role="tabpanel" aria-labelledby="tab-overview">
+<h2>Overview</h2>
+<div class="grid">
+<div class="metric"><span class="badge good">Network</span><strong>4 × 10 MiB</strong><span class="muted">AUR info, comments, PKGBUILD, and .SRCINFO streamed ceilings</span></div>
+<div class="metric"><span class="badge good">Compatibility</span><strong>6 features</strong><span class="muted">Exact Pacsea projection with defaults disabled</span></div>
+<div class="metric"><span class="badge good">Package</span><strong>96 files</strong><span class="muted">Lean crates.io payload; plans, reports, CI, and dev scripts excluded</span></div>
+<div class="metric"><span class="badge good">Complexity</span><strong>0 violations</strong><span class="muted">All measured functions below the repository threshold</span></div>
+</div>
+<h3 style="margin-top:22px">Release-readiness map</h3>
+<div class="table-wrap"><table data-overview><thead><tr><th>Area</th><th>Implemented contract</th><th>Evidence</th><th>Status</th></tr></thead><tbody>
+<tr><td>U1–U4 network</td><td>Header precheck, chunk streaming, strict UTF-8, contextual parse/size errors</td><td>Shared raw-socket/wiremock tests plus per-operation fixtures</td><td><span class="good">Verified</span></td></tr>
+<tr><td>U5–U7 commands</td><td>Strict first byte, <code>--</code> operands, stderr/status 127 fallback</td><td>Direct/batch/remove argv tests and isolated fake-helper execution</td><td><span class="good">Verified</span></td></tr>
+<tr><td>U8 Pacsea contract</td><td><code>aur,deps,index,install,news,sandbox</code> without defaults</td><td>Model fixtures, CI matrix row, dependency-tree isolation</td><td><span class="good">Verified</span></td></tr>
+<tr><td>U9 release identity</td><td>Local release commit and clean dry-run; no external release action</td><td>Exact SHA and command receipts in archived plan/branch PR</td><td><span class="warn">Local handoff only</span></td></tr>
+</tbody></table></div>
+</section>
+<section class="panel" id="implementation" role="tabpanel" aria-labelledby="tab-implementation">
+<h2>Implementation map</h2>
+<div class="grid">
+<article class="card"><span class="badge info">W1</span><h3>Bounded HTTP response reader</h3><p><code>src/http.rs</code> rejects declared oversize before allocation, caps streamed chunks using saturating arithmetic, and validates UTF-8 only after the byte ceiling. Four AUR callers retain request, retry, timeout, backoff, and status behavior while adding package/operation context.</p></article>
+<article class="card"><span class="badge info">W2</span><h3>Install operand safety</h3><p>Package names now match <code>^[a-z0-9][a-z0-9@._+-]*$</code>. Install/remove builders and runtime AUR install fallback place <code>--</code> before operands. Missing helpers emit the unchanged message to stderr and terminate the fallback subshell with status 127.</p></article>
+<article class="card"><span class="badge info">I1</span><h3>Compatibility and packaging</h3><p>The exact Pacsea feature set has aggregate model tests and a CI test row. A dependency-tree gate rejects fuzzy/cache leakage. README and changelog describe 0.3 behavior, and the manifest whitelist creates a lean crate.</p></article>
+</div>
+<figure data-visual-kind="diagram" data-purpose="Show the bounded response and release evidence flow">
+<svg role="img" aria-labelledby="flow-title flow-desc" viewBox="0 0 900 330">
+<title id="flow-title">Implementation and release evidence flow</title><desc id="flow-desc">Network responses pass through status handling, a shared bounded reader, strict UTF-8, and operation parsing; integrated code then passes compatibility tests, the full matrix, independent review, and a local release commit.</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#a9b7cb"/></marker></defs>
+<path class="edge" d="M185 90 H255"/><path class="edge" d="M415 90 H485"/><path class="edge" d="M645 90 H715"/><path class="edge" d="M790 130 C790 220 615 245 565 245"/><path class="edge" d="M485 245 H415"/><path class="edge" d="M255 245 H185"/>
+<rect class="node done" x="25" y="55" width="160" height="70" rx="12"/><text class="node-text" x="105" y="86">HTTP status</text><text class="node-text" x="105" y="107">and context</text>
+<rect class="node done" x="255" y="55" width="160" height="70" rx="12"/><text class="node-text" x="335" y="86">10 MiB streamed</text><text class="node-text" x="335" y="107">byte ceiling</text>
+<rect class="node done" x="485" y="55" width="160" height="70" rx="12"/><text class="node-text" x="565" y="86">Strict UTF-8</text><text class="node-text" x="565" y="107">then parsing</text>
+<rect class="node done" x="715" y="55" width="160" height="70" rx="12"/><text class="node-text" x="795" y="86">Pacsea model</text><text class="node-text" x="795" y="107">contracts</text>
+<rect class="node done" x="485" y="210" width="160" height="70" rx="12"/><text class="node-text" x="565" y="241">Full release</text><text class="node-text" x="565" y="262">matrix</text>
+<rect class="node done" x="255" y="210" width="160" height="70" rx="12"/><text class="node-text" x="335" y="241">Two-provider</text><text class="node-text" x="335" y="262">review</text>
+<rect class="node done" x="25" y="210" width="160" height="70" rx="12"/><text class="node-text" x="105" y="241">Immutable local</text><text class="node-text" x="105" y="262">handoff</text>
+</svg>
+<figcaption>Green-outlined nodes are implemented completion gates. External publication remains intentionally outside the flow.</figcaption>
+</figure>
+<div class="callout warn"><strong>Scope invariant:</strong> arch-toolkit remains a frontend-agnostic library. Pacsea retains command execution, dry-run presentation, privilege/password sessions, PTY lifecycle, cancellation, caches, UI state, and transaction orchestration.</div>
+</section>
+<section class="panel" id="validation" role="tabpanel" aria-labelledby="tab-validation">
+<h2>Testing and acceptance evidence</h2>
+<ul class="checks">
+<li>Formatting, strict all-feature Clippy, default check, and default serial tests pass.</li>
+<li>No-default checks pass for the empty feature set and each of <code>aur</code>, <code>deps</code>, <code>index</code>, <code>install</code>, <code>news</code>, and <code>sandbox</code>.</li>
+<li>The exact Pacsea projection passes serially; all features pass serially and in parallel.</li>
+<li>Shared HTTP tests cover declared oversize, missing length, dishonest long and short headers, chunked overflow, exact limit, and invalid UTF-8.</li>
+<li>Install integration tests cover direct/remove/batch/fallback leading-option rejection, exact argv, privilege boundaries, helper preference, stderr, and status 127.</li>
+<li>Complexity self-test/report, rustdoc, RustSec audit, Rust 1.91 MSRV, dependency-tree isolation, package inspection, and publish dry run pass.</li>
+</ul>
+<div class="table-wrap"><table><thead><tr><th>Gate</th><th>Result</th><th>Important observation</th></tr></thead><tbody>
+<tr><td>Pacsea projection</td><td class="good">Exit 0</td><td>No <code>fuzzy-matcher</code> or <code>dirs</code> in the selected dependency tree.</td></tr>
+<tr><td>All-feature tests</td><td class="good">Exit 0</td><td>Serial and parallel runs complete without failures; live host/network tests remain ignored diagnostics.</td></tr>
+<tr><td>Complexity</td><td class="good">Exit 0</td><td>No function reaches the configured threshold of 25.</td></tr>
+<tr><td>RustSec audit</td><td class="good">Exit 0</td><td>No known vulnerabilities reported for the lockfile.</td></tr>
+<tr><td>Package payload</td><td class="good">96 files</td><td>Source, examples, tests, Cargo files, README, changelog, and license only.</td></tr>
+</tbody></table></div>
+<details><summary>Representative verification command</summary><pre><code>cargo test --locked --no-default-features \
+  --features aur,deps,index,install,news,sandbox \
+  -- --test-threads=1</code></pre></details>
+</section>
+<section class="panel" id="review" role="tabpanel" aria-labelledby="tab-review">
+<h2>Independent review and dispositions</h2>
+<p>Two fresh-context read-only reviewers from distinct provider families inspected the integrated source and tests. Findings were advisory and independently dispositioned by the integration owner.</p>
+<div class="table-wrap"><table><thead><tr><th>Reviewer</th><th>Finding</th><th>Disposition</th><th>Evidence/action</th></tr></thead><tbody>
+<tr><td>R1 · Anthropic</td><td>HTTP helper was compiled but unused under index/news-only builds.</td><td class="good">Accepted and fixed</td><td>Gate narrowed to <code>feature = "aur"</code>; standalone checks are warning-free.</td></tr>
+<tr><td>R1 · Anthropic</td><td>Malformed info JSON and .SRCINFO mid-body error variants are behavior deltas.</td><td class="good">Accepted/documented</td><td>CHANGELOG explicitly records contextual <code>Parse</code> behavior.</td></tr>
+<tr><td>R1 · Anthropic</td><td>Dishonest short Content-Length lacked an explicit test.</td><td class="good">Accepted and fixed</td><td>Raw response fixture combines a short declaration with chunked framing and proves streamed overflow rejection.</td></tr>
+<tr><td>R1 · Anthropic</td><td>Real paru/yay <code>--</code> behavior not executed.</td><td class="warn">Deferred to Pacsea parity</td><td>Fake-helper argv is deterministic; strict name validation remains an independent safety barrier.</td></tr>
+<tr><td>R2 · Google</td><td>No blockers; package and compatibility contracts pass.</td><td class="good">Accepted</td><td>Independent commands confirmed projection, matrix, complexity, and lean package.</td></tr>
+</tbody></table></div>
+<p><strong>Review outcome:</strong> PASS after the accepted hygiene and coverage fixes. No unresolved blocker remains.</p>
+</section>
+<section class="panel" id="rollout" role="tabpanel" aria-labelledby="tab-rollout">
+<h2>Pacsea and crates.io handoff</h2>
+<ol>
+<li><strong>Pacsea dependency:</strong> use <code>default-features = false</code> with only <code>aur,deps,index,install,news,sandbox</code>; pin the exact local/remote commit recorded in the archived plan until 0.3.0 is published.</li>
+<li><strong>Expected behavior changes:</strong> toolkit-generated install/remove argv contains <code>--</code>; missing helper fallback writes to stderr and exits 127; bounded AUR body failures return contextual size/parse errors.</li>
+<li><strong>Consumer responsibilities:</strong> retain search cap, caches, retry/circuit policy, repository merge/enrichment, article/read state, scanners, AUR voting, execution, dry-run, password/privilege, PTY, lock, confirmation, cancellation, and logging.</li>
+<li><strong>External release boundary:</strong> tagging, pushing, GitHub release creation, and <code>cargo publish</code> require a separate explicit authorization. This implementation run performs none of them.</li>
+</ol>
+<div class="callout"><strong>Canonical record:</strong> <a href="../plans/archive/PACSEA_V0_3_0_UPSTREAM_PREREQUISITES.md">Archived prerequisite plan</a>. The archived plan and ignored branch PR record hold the exact release commit and clean-tree command receipts because a report included in that commit cannot self-reference its own final SHA.</div>
+<h3>Residual risks</h3>
+<ul>
+<li>Live AUR/Arch endpoints and real host helpers remain intentionally outside deterministic release gates.</li>
+<li>Pacsea must rerun its own differential behavior, packaging, and security gates before deleting local implementations.</li>
+<li>No crates.io upload has occurred; readiness is not publication.</li>
+</ul>
+</section>
+<footer><p>Generated for arch-toolkit 0.3.0 release hardening on 2026-08-08. Evidence sources: repository diff, canonical plan, worker handoffs, command logs, package list, and two independent review artifacts.</p></footer>
+</main>
+<script>
+(()=>{const tabs=[...document.querySelectorAll('[role=tab]')];const panels=tabs.map(t=>document.getElementById(t.getAttribute('aria-controls')));document.documentElement.classList.add('tabs-ready');function activate(tab,focus=false){tabs.forEach((candidate,i)=>{const selected=candidate===tab;candidate.setAttribute('aria-selected',String(selected));candidate.tabIndex=selected?0:-1;panels[i].hidden=!selected});history.replaceState(null,'',`#${tab.getAttribute('aria-controls')}`);if(focus)tab.focus()}tabs.forEach((tab,i)=>{tab.addEventListener('click',()=>activate(tab));tab.addEventListener('keydown',e=>{let n=null;if(e.key==='ArrowRight')n=(i+1)%tabs.length;if(e.key==='ArrowLeft')n=(i-1+tabs.length)%tabs.length;if(e.key==='Home')n=0;if(e.key==='End')n=tabs.length-1;if(n!==null){e.preventDefault();activate(tabs[n],true)}})});const initial=panels.findIndex(p=>`#${p.id}`===location.hash);activate(tabs[initial>=0?initial:0]);document.getElementById('print').addEventListener('click',()=>window.print());document.getElementById('copy').addEventListener('click',async()=>{const status=document.getElementById('status');try{await navigator.clipboard.writeText(location.href);status.textContent='Link copied.'}catch{status.textContent='Copy unavailable; use the address bar.'}})})();
+</script>
+</body>
+</html>

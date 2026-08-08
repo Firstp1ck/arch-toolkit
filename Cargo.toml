@@ -8,6 +8,16 @@ license = "MIT"
 repository = "https://github.com/Firstp1ck/arch-toolkit"
 keywords = ["archlinux", "aur", "pacman", "package-manager"]
 categories = ["api-bindings", "command-line-utilities"]
+include = [
+    "src/**",
+    "examples/**",
+    "tests/**",
+    "Cargo.toml",
+    "Cargo.lock",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+]
 
 [features]
 default = ["aur"]
