@@ -21,9 +21,9 @@ static DEFAULT_VALIDATION_CONFIG: LazyLock<ValidationConfig> =
 pub struct ValidationConfig {
     /// Whether to return errors for empty inputs (strict) or empty results (lenient).
     pub strict_empty: bool,
-    /// Maximum search query length in characters (default: 256).
+    /// Maximum search query length in bytes (default: 256).
     pub max_query_length: usize,
-    /// Maximum package name length in characters (default: 127).
+    /// Maximum package name length in bytes (default: 127).
     pub max_package_name_length: usize,
 }
 
@@ -51,7 +51,7 @@ impl Default for ValidationConfig {
 ///   - Allowed characters: lowercase letters (a-z), digits (0-9), `@`, `.`, `_`, `+`, `-`
 ///   - Cannot start with hyphen (`-`) or period (`.`)
 ///   - Must be non-empty
-///   - Maximum length: 127 characters (default, configurable)
+///   - Maximum length: 127 bytes (default, configurable)
 /// - Returns the input string on success for method chaining
 ///
 /// # Errors
@@ -172,7 +172,7 @@ pub fn validate_package_names(names: &[&str], config: Option<&ValidationConfig>)
 /// - Trims whitespace from the query
 /// - In strict mode, empty queries after trimming return an error
 /// - In lenient mode, empty queries are allowed
-/// - Checks maximum length (default: 256 characters)
+/// - Checks maximum length (default: 256 bytes)
 /// - Any characters are allowed (will be percent-encoded)
 ///
 /// # Errors

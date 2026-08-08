@@ -183,6 +183,10 @@ mod tests {
             .await
             .expect_err("declared oversize must fail");
 
+        assert_eq!(
+            error.to_string(),
+            "declared fixture response body exceeds maximum length of 8 bytes (got 9)"
+        );
         assert!(matches!(
             error,
             ArchToolkitError::InputTooLong {

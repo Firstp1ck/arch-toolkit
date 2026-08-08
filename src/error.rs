@@ -122,14 +122,14 @@ pub enum ArchToolkitError {
         reason: String,
     },
 
-    /// Input exceeds maximum length.
-    #[error("{field} exceeds maximum length of {max_length} characters (got {actual_length})")]
+    /// Input exceeds the maximum byte length.
+    #[error("{field} exceeds maximum length of {max_length} bytes (got {actual_length})")]
     InputTooLong {
         /// The field name that is too long.
         field: String,
-        /// Maximum allowed length.
+        /// Maximum allowed length in bytes.
         max_length: usize,
-        /// Actual length of the input.
+        /// Actual length of the input in bytes.
         actual_length: usize,
     },
 }
