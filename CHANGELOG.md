@@ -15,12 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PKGBUILD and `.SRCINFO` sandbox dependency preflight analysis.
 - Bounded, deterministic dependency graph resolution with injected metadata, cycle diagnostics, constraint intersection, provider provenance, split-package handling, and stable tree rendering.
 - Deterministic feature-matrix, complexity, missing-tool, and compatibility quality gates.
+- Exact no-default-feature Pacsea compatibility projection for `aur,deps,index,install,news,sandbox`, including optional-dependency isolation checks.
+- One private streamed HTTP response reader shared by AUR info, comments, PKGBUILD, and `.SRCINFO` retrieval.
 
 ### Changed
 
 - Selected the next minor version, `0.3.0`, because post-v0.2.0 work adds multiple public feature-gated modules while preserving existing entry points.
 - Package version comparison now handles epochs and follows libalpm by comparing numeric pkgrel only when both operands declare one.
 - Existing Arch news and advisory fetch functions now reject responses above 512 KiB with `InputTooLong`; AUR search responses are bounded to 4 MiB without imposing a result-count cap.
+- AUR info, comments, PKGBUILD, and `.SRCINFO` responses now enforce strict streamed 10 MiB byte ceilings and reject invalid UTF-8 before parsing.
+- Malformed AUR info JSON now returns a contextual `Parse` error instead of an `InfoFailed` transport error; `.SRCINFO` mid-body transport failures likewise return contextual `Parse` errors naming the package.
+- Generated install/remove argv and AUR install fallback bodies now place `--` before package operands.
+- The missing-AUR-helper fallback now writes the existing message to stderr and exits with status 127 instead of appearing successful.
 - Release preview now performs local verification without committing, tagging, pushing, creating releases, or publishing.
 - Internal pacman and helper parsing remains locale-independent through `LC_ALL=C`/`LANG=C`; no unused localized-label API was added.
 
@@ -30,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Environment- and PATH-mutating tests are serialized and restore process state.
 - The previous complexity script no longer reports success after analyzing zero functions.
 - Documentation and automation now consistently use `v<version>` tags.
+- Install command builders reject package names whose first byte is not a lowercase ASCII letter or digit, preventing leading-option and hidden-name confusion while preserving valid internal punctuation.
 
 ### Compatibility and intentional differences
 

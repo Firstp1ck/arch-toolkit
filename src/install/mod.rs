@@ -22,7 +22,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! arch-toolkit = { version = "0.2", features = ["install"] }
+//! arch-toolkit = { version = "0.3", features = ["install"] }
 //! ```
 //!
 //! # Examples
@@ -73,7 +73,7 @@
 //!     PrivilegeTool::Sudo,
 //!     build_remove_command(&["old-package"], CascadeMode::CascadeWithConfigs, true)?,
 //! );
-//! assert_eq!(spec.to_shell_string(), "sudo pacman -Rns --noconfirm old-package");
+//! assert_eq!(spec.to_shell_string(), "sudo pacman -Rns --noconfirm -- old-package");
 //! # Ok::<(), arch_toolkit::error::ArchToolkitError>(())
 //! ```
 //!

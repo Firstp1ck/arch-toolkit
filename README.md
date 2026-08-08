@@ -61,7 +61,7 @@ Add `arch-toolkit` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-arch-toolkit = "0.2"
+arch-toolkit = "0.3"
 ```
 
 ### Feature Flags
@@ -78,25 +78,25 @@ arch-toolkit = "0.2"
 To disable default features:
 
 ```toml
-arch-toolkit = { version = "0.2", default-features = false, features = ["aur"] }
+arch-toolkit = { version = "0.3", default-features = false, features = ["aur"] }
 ```
 
 To enable dependency parsing:
 
 ```toml
-arch-toolkit = { version = "0.2", features = ["deps"] }
+arch-toolkit = { version = "0.3", features = ["deps"] }
 ```
 
 To enable disk caching:
 
 ```toml
-arch-toolkit = { version = "0.2", features = ["cache-disk"] }
+arch-toolkit = { version = "0.3", features = ["cache-disk"] }
 ```
 
 To enable package index queries:
 
 ```toml
-arch-toolkit = { version = "0.2", features = ["index"] }
+arch-toolkit = { version = "0.3", features = ["index"] }
 ```
 
 ## Quick Start
@@ -416,7 +416,7 @@ let remove = with_privilege(
     detect_privilege_tool().expect("sudo or doas required"),
     build_remove_command(&["old-package"], CascadeMode::CascadeWithConfigs, true)?,
 );
-println!("{remove}"); // sudo pacman -Rns --noconfirm old-package
+println!("{remove}"); // sudo pacman -Rns --noconfirm -- old-package
 ```
 
 ### News and Security Advisories

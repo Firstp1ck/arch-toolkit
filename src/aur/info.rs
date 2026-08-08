@@ -13,6 +13,9 @@ use reqwest::Client;
 use serde_json::Value;
 use tracing::{debug, warn};
 
+/// Maximum accepted AUR info response body size in bytes.
+const MAX_AUR_INFO_RESPONSE_BYTES: usize = 10 * 1024 * 1024;
+
 /// What: Fetch detailed information for one or more AUR packages.
 ///
 /// Inputs:
@@ -112,6 +115,7 @@ pub async fn info(client: &ArchClient, names: &[&str]) -> Result<Vec<AurPackageD
 /// Inputs:
 /// - `client`: HTTP client to use for requests.
 /// - `url`: URL to request.
+/// - `package_names`: Package names retained in every operation error.
 ///
 /// Output:
 /// - `Result<Vec<AurPackageDetails>>` containing package details, or an error.
@@ -146,15 +150,17 @@ async fn perform_info_request(
         }
     };
 
-    let json: Value = match response.json().await {
-        Ok(json) => json,
-        Err(e) => {
-            warn!(error = %e, packages = ?package_names, "failed to parse AUR info JSON");
-            // reqwest::Error can contain serde_json::Error, but we'll treat it as network error
-            // since the JSON parsing happens inside reqwest
-            return Err(ArchToolkitError::info_failed(package_names, e));
-        }
-    };
+    let resource_label = format!("AUR info for packages [{}]", package_names.join(", "));
+    let text = crate::http::read_bounded_response_text(
+        response,
+        MAX_AUR_INFO_RESPONSE_BYTES,
+        &resource_label,
+        |error| ArchToolkitError::info_failed(package_names, error),
+    )
+    .await?;
+    let json: Value = serde_json::from_str(&text).map_err(|error| {
+        ArchToolkitError::Parse(format!("failed to parse {resource_label} JSON: {error}"))
+    })?;
 
     let mut packages = Vec::new();
 
@@ -244,6 +250,8 @@ mod tests {
     use super::*;
     use crate::error::ArchToolkitError;
     use serde_json::json;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
     fn test_info_error_includes_package_context() {
@@ -264,6 +272,147 @@ mod tests {
             error_msg.contains("AUR info fetch failed"),
             "Error message should indicate info operation: {error_msg}"
         );
+    }
+
+    #[tokio::test]
+    /// What: Verify an oversized AUR info body is rejected before JSON parsing.
+    ///
+    /// Inputs:
+    /// - A local response declaring a body one byte above the approved 10 MiB ceiling.
+    ///
+    /// Output:
+    /// - `InputTooLong` retaining AUR info and package context.
+    ///
+    /// Details:
+    /// - This regression test uses a deterministic wiremock endpoint and no live service.
+    async fn oversized_aur_info_response_is_rejected() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/info"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(vec![
+                b'x';
+                MAX_AUR_INFO_RESPONSE_BYTES
+                    + 1
+            ]))
+            .mount(&server)
+            .await;
+
+        let error =
+            perform_info_request(&Client::new(), &format!("{}/info", server.uri()), &["yay"])
+                .await
+                .expect_err("oversized AUR info response must fail");
+        let message = error.to_string();
+
+        assert!(matches!(
+            error,
+            ArchToolkitError::InputTooLong {
+                max_length: MAX_AUR_INFO_RESPONSE_BYTES,
+                ..
+            }
+        ));
+        assert!(message.contains("info"));
+        assert!(message.contains("yay"));
+    }
+
+    #[tokio::test]
+    /// What: Preserve operation and package context for empty or malformed AUR info JSON.
+    ///
+    /// Inputs:
+    /// - Local empty and syntactically malformed successful responses.
+    ///
+    /// Output:
+    /// - Contextual `Parse` errors for both bodies.
+    ///
+    /// Details:
+    /// - Explicit serde JSON parsing occurs only after the bounded UTF-8 read.
+    async fn empty_and_malformed_aur_info_bodies_are_contextual() {
+        for (path_value, body) in [("/empty", ""), ("/malformed", "{")] {
+            let server = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path(path_value))
+                .respond_with(ResponseTemplate::new(200).set_body_string(body))
+                .mount(&server)
+                .await;
+
+            let error = perform_info_request(
+                &Client::new(),
+                &format!("{}{path_value}", server.uri()),
+                &["yay"],
+            )
+            .await
+            .expect_err("invalid AUR info JSON must fail");
+            let message = error.to_string();
+
+            assert!(matches!(error, ArchToolkitError::Parse(_)));
+            assert!(message.contains("AUR info"));
+            assert!(message.contains("yay"));
+        }
+    }
+
+    #[tokio::test]
+    /// What: Preserve info-operation context for a non-success status.
+    ///
+    /// Inputs:
+    /// - A local HTTP 503 response for package `yay`.
+    ///
+    /// Output:
+    /// - Existing `InfoFailed` with status and package context.
+    ///
+    /// Details:
+    /// - Status handling remains ahead of bounded body consumption.
+    async fn non_success_aur_info_status_is_contextual() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/info"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&server)
+            .await;
+
+        let error =
+            perform_info_request(&Client::new(), &format!("{}/info", server.uri()), &["yay"])
+                .await
+                .expect_err("non-success AUR info status must fail");
+        let message = error.to_string();
+
+        assert!(matches!(error, ArchToolkitError::InfoFailed { .. }));
+        assert!(message.contains("yay"));
+        assert!(message.contains("503"));
+    }
+
+    #[tokio::test]
+    /// What: Parse a normal bounded AUR info fixture through the request path.
+    ///
+    /// Inputs:
+    /// - One valid AUR RPC result from a local HTTP server.
+    ///
+    /// Output:
+    /// - One populated `AurPackageDetails` entry.
+    ///
+    /// Details:
+    /// - Covers the explicit JSON parser after streamed response reading.
+    async fn normal_aur_info_fixture_is_parsed() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/info"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "results": [{
+                    "Name": "yay",
+                    "Version": "12.3.4-1",
+                    "Description": "AUR helper",
+                    "Depends": ["git"]
+                }]
+            })))
+            .mount(&server)
+            .await;
+
+        let packages =
+            perform_info_request(&Client::new(), &format!("{}/info", server.uri()), &["yay"])
+                .await
+                .expect("normal AUR info fixture");
+
+        assert_eq!(packages.len(), 1);
+        assert_eq!(packages[0].name, "yay");
+        assert_eq!(packages[0].depends, ["git"]);
     }
 
     #[test]

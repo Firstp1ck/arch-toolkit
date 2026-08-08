@@ -14,6 +14,9 @@ use reqwest::header::{ACCEPT, ACCEPT_LANGUAGE, HeaderMap, HeaderValue};
 use scraper::{ElementRef, Html, Selector};
 use tracing::debug;
 
+/// Maximum accepted AUR comments response body size in bytes.
+const MAX_AUR_COMMENTS_RESPONSE_BYTES: usize = 10 * 1024 * 1024;
+
 /// Context for extracting comment data from HTML elements.
 struct CommentExtractionContext<'a> {
     /// Parsed HTML document
@@ -117,6 +120,7 @@ pub async fn comments(client: &ArchClient, pkgname: &str) -> Result<Vec<AurComme
 /// Inputs:
 /// - `client`: HTTP client to use for requests.
 /// - `url`: URL to request.
+/// - `pkgname`: Package name retained in every operation error.
 ///
 /// Output:
 /// - `Result<String>` containing HTML text, or an error.
@@ -159,15 +163,14 @@ async fn perform_comments_request(
         }
     };
 
-    let html_text = match response.text().await {
-        Ok(text) => text,
-        Err(e) => {
-            debug!(error = %e, pkgname = %pkgname, "failed to read AUR comments response");
-            return Err(ArchToolkitError::comments_failed(pkgname, e));
-        }
-    };
-
-    Ok(html_text)
+    let resource_label = format!("AUR comments for package '{pkgname}'");
+    crate::http::read_bounded_response_text(
+        response,
+        MAX_AUR_COMMENTS_RESPONSE_BYTES,
+        &resource_label,
+        |error| ArchToolkitError::comments_failed(pkgname, error),
+    )
+    .await
 }
 
 /// What: Parse HTML and extract comments.
@@ -190,16 +193,24 @@ fn parse_comments_html(html_text: &str, pkgname: &str) -> Result<Vec<AurComment>
     // - Each comment has an <h4 class="comment-header"> with author and date
     // - The content is in a following <div class="article-content"> with id "comment-{id}-content"
     // - Pinned comments appear before "Latest Comments" heading
-    let comment_header_selector = Selector::parse("h4.comment-header").map_err(|e| {
-        ArchToolkitError::Parse(format!("Failed to parse comment header selector: {e}"))
+    let comment_header_selector = Selector::parse("h4.comment-header").map_err(|error| {
+        ArchToolkitError::Parse(format!(
+            "failed to parse AUR comments for package '{pkgname}' header selector: {error}"
+        ))
     })?;
 
-    let date_selector = Selector::parse("a.date")
-        .map_err(|e| ArchToolkitError::Parse(format!("Failed to parse date selector: {e}")))?;
+    let date_selector = Selector::parse("a.date").map_err(|error| {
+        ArchToolkitError::Parse(format!(
+            "failed to parse AUR comments for package '{pkgname}' date selector: {error}"
+        ))
+    })?;
 
     // Find the "Latest Comments" heading to separate pinned from regular comments
-    let heading_selector = Selector::parse("h3, h2, h4")
-        .map_err(|e| ArchToolkitError::Parse(format!("Failed to parse heading selector: {e}")))?;
+    let heading_selector = Selector::parse("h3, h2, h4").map_err(|error| {
+        ArchToolkitError::Parse(format!(
+            "failed to parse AUR comments for package '{pkgname}' heading selector: {error}"
+        ))
+    })?;
 
     // Check if there's a "Pinned Comments" section
     let has_pinned_section = document.select(&heading_selector).any(|h| {
@@ -723,7 +734,10 @@ fn format_text_node(element: &ElementRef) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::error::ArchToolkitError;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
     fn test_comments_error_includes_package_context() {
@@ -740,5 +754,119 @@ mod tests {
             error_msg.contains("AUR comments fetch failed"),
             "Error message should indicate comments operation: {error_msg}"
         );
+    }
+
+    #[tokio::test]
+    /// What: Verify an oversized AUR comments body is rejected while reading.
+    ///
+    /// Inputs:
+    /// - A local HTML response one byte above the approved 10 MiB ceiling.
+    ///
+    /// Output:
+    /// - `InputTooLong` retaining comments-operation and package context.
+    ///
+    /// Details:
+    /// - The local fixture exercises the request helper without live AUR traffic.
+    async fn oversized_aur_comments_response_is_rejected() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/comments"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(vec![
+                b'x';
+                MAX_AUR_COMMENTS_RESPONSE_BYTES
+                    + 1
+            ]))
+            .mount(&server)
+            .await;
+
+        let error = perform_comments_request(
+            &ReqwestClient::new(),
+            &format!("{}/comments", server.uri()),
+            "yay",
+        )
+        .await
+        .expect_err("oversized comments response must fail");
+        let message = error.to_string();
+
+        assert!(matches!(
+            error,
+            ArchToolkitError::InputTooLong {
+                max_length: MAX_AUR_COMMENTS_RESPONSE_BYTES,
+                ..
+            }
+        ));
+        assert!(message.contains("comments"));
+        assert!(message.contains("yay"));
+    }
+
+    #[tokio::test]
+    /// What: Preserve comments-operation context for status and UTF-8 body failures.
+    ///
+    /// Inputs:
+    /// - Local HTTP 503 and invalid UTF-8 responses for package `yay`.
+    ///
+    /// Output:
+    /// - Contextual errors identifying comments and the package.
+    ///
+    /// Details:
+    /// - Status rejection precedes body reading; UTF-8 validation follows the byte bound.
+    async fn aur_comments_status_and_utf8_errors_are_contextual() {
+        for (path_value, template) in [
+            ("/status", ResponseTemplate::new(503)),
+            (
+                "/utf8",
+                ResponseTemplate::new(200).set_body_bytes([0xf0, 0x28, 0x8c]),
+            ),
+        ] {
+            let server = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path(path_value))
+                .respond_with(template)
+                .mount(&server)
+                .await;
+
+            let error = perform_comments_request(
+                &ReqwestClient::new(),
+                &format!("{}{path_value}", server.uri()),
+                "yay",
+            )
+            .await
+            .expect_err("invalid comments response must fail");
+            let message = error.to_string();
+
+            assert!(message.contains("comments"));
+            assert!(message.contains("yay"));
+        }
+    }
+
+    #[tokio::test]
+    /// What: Return a normal bounded AUR comments HTML fixture unchanged.
+    ///
+    /// Inputs:
+    /// - A small local HTML package page.
+    ///
+    /// Output:
+    /// - The exact UTF-8 response body.
+    ///
+    /// Details:
+    /// - HTML parsing remains a separate, non-executing operation.
+    async fn normal_aur_comments_fixture_is_read() {
+        let server = MockServer::start().await;
+        let html = "<html><body><h3>Latest Comments</h3></body></html>";
+        Mock::given(method("GET"))
+            .and(path("/comments"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(html))
+            .mount(&server)
+            .await;
+
+        let body = perform_comments_request(
+            &ReqwestClient::new(),
+            &format!("{}/comments", server.uri()),
+            "yay",
+        )
+        .await
+        .expect("normal comments fixture");
+
+        assert_eq!(body, html);
     }
 }

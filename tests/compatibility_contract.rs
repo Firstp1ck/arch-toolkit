@@ -4,7 +4,9 @@
     feature = "aur",
     feature = "deps",
     feature = "index",
-    feature = "install"
+    feature = "install",
+    feature = "news",
+    feature = "sandbox"
 ))]
 mod tests {
     #[cfg(all(any(feature = "install", feature = "deps"), unix))]
@@ -129,7 +131,7 @@ mod tests {
             .expect("build command plan");
         assert_eq!(
             spec.to_shell_string(),
-            "pacman -S --needed --noconfirm ripgrep"
+            "pacman -S --needed --noconfirm -- ripgrep"
         );
         assert!(!marker.exists(), "building a command must never execute it");
     }
@@ -171,5 +173,135 @@ mod tests {
                 .pkgs
                 .is_empty()
         );
+    }
+
+    #[cfg(feature = "aur")]
+    #[test]
+    /// What: Freeze the AUR model fields consumed by Pacsea.
+    ///
+    /// Inputs:
+    /// - Representative search, detail, and comment values.
+    ///
+    /// Output:
+    /// - Direct field access and serialization retain the consumer-facing data.
+    ///
+    /// Details:
+    /// - This is an aggregate compatibility fixture, not a network test.
+    fn pacsea_aur_model_contract() {
+        use arch_toolkit::types::package::{AurComment, AurPackage, AurPackageDetails};
+
+        let package = AurPackage {
+            name: "paru".to_string(),
+            version: "2.1.0-1".to_string(),
+            description: "AUR helper".to_string(),
+            popularity: Some(9.5),
+            out_of_date: Some(1_700_000_000),
+            orphaned: false,
+            maintainer: Some("maintainer".to_string()),
+        };
+        assert_eq!(package.name, "paru");
+        assert_eq!(package.maintainer.as_deref(), Some("maintainer"));
+
+        let details = AurPackageDetails {
+            name: "paru".to_string(),
+            version: "2.1.0-1".to_string(),
+            depends: vec!["pacman".to_string()],
+            make_depends: vec!["cargo".to_string()],
+            opt_depends: vec!["bat: colored output".to_string()],
+            provides: vec!["aur-helper".to_string()],
+            conflicts: vec!["paru-bin".to_string()],
+            num_votes: Some(42),
+            ..Default::default()
+        };
+        assert_eq!(details.depends, ["pacman"]);
+        assert_eq!(details.provides, ["aur-helper"]);
+        assert_eq!(details.num_votes, Some(42));
+
+        let comment = AurComment {
+            id: Some("123".to_string()),
+            author: "alice".to_string(),
+            date: "2026-08-08".to_string(),
+            date_timestamp: Some(1_786_147_200),
+            date_url: Some("https://aur.archlinux.org/packages/paru#comment-123".to_string()),
+            content: "Pinned guidance".to_string(),
+            pinned: true,
+        };
+        let serialized = serde_json::to_value(comment).expect("serialize AUR comment");
+        assert_eq!(serialized["id"], "123");
+        assert_eq!(serialized["pinned"], true);
+    }
+
+    #[cfg(feature = "news")]
+    #[test]
+    /// What: Freeze advisory identity, severity, package extraction, and serde fields for Pacsea.
+    ///
+    /// Inputs:
+    /// - A representative security advisory.
+    ///
+    /// Output:
+    /// - Stable ID, rank, package list, and serialized representation.
+    ///
+    /// Details:
+    /// - Caller read-state remains outside the library; this fixture covers only shared data.
+    fn pacsea_news_model_contract() {
+        use arch_toolkit::types::news::{AdvisorySeverity, SecurityAdvisory};
+
+        let advisory = SecurityAdvisory {
+            id: "ASA-202608-1".to_string(),
+            date: "2026-08-08".to_string(),
+            title: "ASA-202608-1: openssl: multiple issues".to_string(),
+            summary: Some("Multiple issues".to_string()),
+            url: Some("https://security.archlinux.org/ASA-202608-1".to_string()),
+            severity: AdvisorySeverity::High,
+            packages: vec!["openssl".to_string()],
+        };
+        assert_eq!(advisory.id, "ASA-202608-1");
+        assert_eq!(advisory.severity.rank(), 4);
+        assert_eq!(advisory.packages, ["openssl"]);
+        let serialized = serde_json::to_value(advisory).expect("serialize advisory");
+        assert_eq!(serialized["severity"], "High");
+    }
+
+    #[cfg(feature = "sandbox")]
+    #[test]
+    /// What: Freeze sandbox dependency-delta serde and version-state behavior for Pacsea.
+    ///
+    /// Inputs:
+    /// - One installed but version-unsatisfied dependency and one missing dependency.
+    ///
+    /// Output:
+    /// - Stable roundtrip data, missing-package list, and readiness behavior.
+    ///
+    /// Details:
+    /// - Pacsea remains responsible for combining installation and version satisfaction in its adapter.
+    fn pacsea_sandbox_model_contract() {
+        use arch_toolkit::types::sandbox::{DependencyDelta, SandboxInfo};
+
+        let info = SandboxInfo {
+            package_name: "demo".to_string(),
+            depends: vec![
+                DependencyDelta {
+                    name: "openssl>=3.5".to_string(),
+                    is_installed: true,
+                    installed_version: Some("3.4".to_string()),
+                    version_satisfied: false,
+                },
+                DependencyDelta {
+                    name: "missing-runtime".to_string(),
+                    is_installed: false,
+                    installed_version: None,
+                    version_satisfied: false,
+                },
+            ],
+            ..Default::default()
+        };
+        assert_eq!(info.missing_packages(), ["missing-runtime"]);
+        assert!(!info.is_ready_to_build());
+        assert!(!info.depends[0].version_satisfied);
+
+        let serialized = serde_json::to_string(&info).expect("serialize sandbox info");
+        let roundtrip: SandboxInfo =
+            serde_json::from_str(&serialized).expect("deserialize sandbox info");
+        assert_eq!(roundtrip, info);
     }
 }

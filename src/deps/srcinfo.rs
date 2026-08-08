@@ -13,6 +13,10 @@ use crate::types::dependency::SrcinfoData;
 #[cfg(feature = "aur")]
 use crate::aur::utils::percent_encode;
 
+/// Maximum accepted AUR `.SRCINFO` response body size in bytes.
+#[cfg(feature = "aur")]
+const MAX_AUR_SRCINFO_RESPONSE_BYTES: usize = 10 * 1024 * 1024;
+
 /// What: Store one split-package output for graph-only `.SRCINFO` resolution.
 ///
 /// Inputs:
@@ -469,48 +473,71 @@ pub fn parse_srcinfo(content: &str) -> SrcinfoData {
 /// - Requires the `aur` feature to be enabled.
 #[cfg(feature = "aur")]
 pub async fn fetch_srcinfo(client: &reqwest::Client, name: &str) -> Result<String> {
-    use crate::error::ArchToolkitError;
-
     let url = format!(
         "https://aur.archlinux.org/cgit/aur.git/plain/.SRCINFO?h={}",
         percent_encode(name)
     );
-    tracing::debug!("Fetching .SRCINFO from: {}", url);
+    fetch_srcinfo_from_url(client, name, &url).await
+}
 
+/// What: Fetch and validate one bounded `.SRCINFO` document from a selected URL.
+///
+/// Inputs:
+/// - `client`: Reqwest HTTP client retaining caller timeout and transport policy.
+/// - `name`: AUR package name retained in every status, body, and parse error.
+/// - `url`: Request URL selected by the public AUR endpoint wrapper or a local test.
+///
+/// Output:
+/// - Validated `.SRCINFO` text within [`MAX_AUR_SRCINFO_RESPONSE_BYTES`].
+///
+/// Details:
+/// - Streams without executing, sourcing, expanding, or logging response content.
+/// - The URL remains private to avoid logging a full untrusted value.
+#[cfg(feature = "aur")]
+async fn fetch_srcinfo_from_url(client: &reqwest::Client, name: &str, url: &str) -> Result<String> {
+    use crate::error::ArchToolkitError;
+
+    tracing::debug!(package = %name, "fetching AUR .SRCINFO");
     let response = client
-        .get(&url)
+        .get(url)
         .send()
         .await
         .map_err(ArchToolkitError::Network)?;
-
-    if !response.status().is_success() {
+    let status = response.status();
+    if !status.is_success() {
         return Err(ArchToolkitError::InvalidInput(format!(
-            "HTTP request failed with status: {}",
-            response.status()
+            "AUR .SRCINFO fetch failed for package '{name}' with status {status}"
         )));
     }
 
-    let text = response.text().await.map_err(ArchToolkitError::Network)?;
+    let resource_label = format!("AUR .SRCINFO for package '{name}'");
+    let text = crate::http::read_bounded_response_text(
+        response,
+        MAX_AUR_SRCINFO_RESPONSE_BYTES,
+        &resource_label,
+        |error| {
+            ArchToolkitError::Parse(format!(
+                "{resource_label} response body read failed: {error}"
+            ))
+        },
+    )
+    .await?;
 
     if text.trim().is_empty() {
         return Err(ArchToolkitError::EmptyInput {
-            field: "srcinfo_content".to_string(),
-            message: "Empty .SRCINFO content".to_string(),
+            field: format!("AUR .SRCINFO response for package '{name}'"),
+            message: "response body was empty".to_string(),
         });
     }
-
-    // Check if we got an HTML error page instead of .SRCINFO content
     if text.trim_start().starts_with("<html") || text.trim_start().starts_with("<!DOCTYPE") {
-        return Err(ArchToolkitError::Parse(
-            "Received HTML error page instead of .SRCINFO".to_string(),
-        ));
+        return Err(ArchToolkitError::Parse(format!(
+            "AUR .SRCINFO fetch for package '{name}' received an HTML error page"
+        )));
     }
-
-    // Validate that it looks like .SRCINFO format (should have pkgbase or pkgname)
     if !text.contains("pkgbase =") && !text.contains("pkgname =") {
-        return Err(ArchToolkitError::Parse(
-            "Response does not appear to be valid .SRCINFO format".to_string(),
-        ));
+        return Err(ArchToolkitError::Parse(format!(
+            "AUR .SRCINFO response for package '{name}' is not valid .SRCINFO format"
+        )));
     }
 
     Ok(text)
@@ -519,6 +546,12 @@ pub async fn fetch_srcinfo(client: &reqwest::Client, name: &str) -> Result<Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "aur")]
+    use crate::error::ArchToolkitError;
+    #[cfg(feature = "aur")]
+    use wiremock::matchers::{method, path};
+    #[cfg(feature = "aur")]
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
     fn test_parse_srcinfo_deps() {
@@ -770,5 +803,127 @@ invalid line
         let data = parse_srcinfo(srcinfo);
         // Should handle gracefully, pkgbase won't be set
         assert_eq!(data.pkgbase, "");
+    }
+
+    #[cfg(feature = "aur")]
+    #[tokio::test]
+    /// What: Reject an oversized AUR `.SRCINFO` response.
+    ///
+    /// Inputs:
+    /// - A local body one byte above the named 10 MiB ceiling.
+    ///
+    /// Output:
+    /// - Contextual `InputTooLong` identifying `.SRCINFO` and package `yay`.
+    ///
+    /// Details:
+    /// - The inert bytes are bounded before metadata format validation.
+    async fn oversized_aur_srcinfo_response_is_rejected() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/.SRCINFO"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(vec![
+                b'x';
+                MAX_AUR_SRCINFO_RESPONSE_BYTES
+                    + 1
+            ]))
+            .mount(&server)
+            .await;
+
+        let error = fetch_srcinfo_from_url(
+            &reqwest::Client::new(),
+            "yay",
+            &format!("{}/.SRCINFO", server.uri()),
+        )
+        .await
+        .expect_err("oversized .SRCINFO response must fail");
+        let message = error.to_string();
+
+        assert!(matches!(
+            error,
+            ArchToolkitError::InputTooLong {
+                max_length: MAX_AUR_SRCINFO_RESPONSE_BYTES,
+                ..
+            }
+        ));
+        assert!(message.contains(".SRCINFO"));
+        assert!(message.contains("yay"));
+    }
+
+    #[cfg(feature = "aur")]
+    #[tokio::test]
+    /// What: Preserve `.SRCINFO` package context for status and invalid bodies.
+    ///
+    /// Inputs:
+    /// - Local 404, empty, malformed text, and HTML responses.
+    ///
+    /// Output:
+    /// - An actionable error naming `.SRCINFO` and package `yay` for each response.
+    ///
+    /// Details:
+    /// - Empty and format checks remain after the bounded strict UTF-8 read.
+    async fn aur_srcinfo_status_empty_and_malformed_errors_are_contextual() {
+        for (path_value, template) in [
+            ("/status", ResponseTemplate::new(404)),
+            ("/empty", ResponseTemplate::new(200)),
+            (
+                "/malformed",
+                ResponseTemplate::new(200).set_body_string("not metadata"),
+            ),
+            (
+                "/html",
+                ResponseTemplate::new(200).set_body_string("<!DOCTYPE html>error"),
+            ),
+        ] {
+            let server = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path(path_value))
+                .respond_with(template)
+                .mount(&server)
+                .await;
+
+            let error = fetch_srcinfo_from_url(
+                &reqwest::Client::new(),
+                "yay",
+                &format!("{}{path_value}", server.uri()),
+            )
+            .await
+            .expect_err("invalid .SRCINFO response must fail");
+            let message = error.to_string();
+
+            assert!(message.contains(".SRCINFO"));
+            assert!(message.contains("yay"));
+        }
+    }
+
+    #[cfg(feature = "aur")]
+    #[tokio::test]
+    /// What: Return a normal bounded `.SRCINFO` fixture unchanged.
+    ///
+    /// Inputs:
+    /// - A local valid metadata document for package `yay`.
+    ///
+    /// Output:
+    /// - Exact source text ready for caller-controlled parsing.
+    ///
+    /// Details:
+    /// - The fetch path validates markers but never executes metadata content.
+    async fn normal_aur_srcinfo_fixture_is_read() {
+        let server = MockServer::start().await;
+        let srcinfo = "pkgbase = yay\npkgname = yay\npkgver = 1\n";
+        Mock::given(method("GET"))
+            .and(path("/.SRCINFO"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(srcinfo))
+            .mount(&server)
+            .await;
+
+        let body = fetch_srcinfo_from_url(
+            &reqwest::Client::new(),
+            "yay",
+            &format!("{}/.SRCINFO", server.uri()),
+        )
+        .await
+        .expect("normal .SRCINFO fixture");
+
+        assert_eq!(body, srcinfo);
     }
 }

@@ -54,6 +54,7 @@ jobs:
           - index,fuzzy-search
           - aur,cache-disk
           - deps,aur
+          - aur,deps,index,install,news,sandbox
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -65,6 +66,16 @@ jobs:
             cargo test --no-default-features -- --test-threads=1
           else
             cargo test --no-default-features --features "${{ matrix.features }}" -- --test-threads=1
+          fi
+      - name: Verify Pacsea optional-feature isolation
+        if: matrix.features == 'aur,deps,index,install,news,sandbox'
+        shell: bash
+        run: |
+          cargo tree --locked --no-default-features --features "${{ matrix.features }}" > /tmp/pacsea-tree.txt
+          if grep -Eq '(^| )fuzzy-matcher v|(^| )dirs v' /tmp/pacsea-tree.txt; then
+            echo "Pacsea feature projection unexpectedly enables fuzzy-search or cache-disk dependencies" >&2
+            cat /tmp/pacsea-tree.txt >&2
+            exit 1
           fi
 
   msrv:
